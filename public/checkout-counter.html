@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OpenUSDT 收银台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa; color: #1a1a1a; min-height: 100vh;
+    }
+
+    /* 顶部导航 */
+    .topbar {
+      background: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #e8eaed;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-logo {
+      width: 36px; height: 36px; background: #0d0d0d; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .topbar-logo svg { width: 22px; height: 22px; }
+    .topbar-title { font-size: 16px; font-weight: 700; }
+    .topbar-sub { font-size: 12px; color: #9ca3af; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f0fdf4; color: #16a34a; padding: 6px 14px;
+      border-radius: 20px; font-size: 13px; font-weight: 600;
+    }
+    .status-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* 步骤指示器 */
+    .steps {
+      display: flex; align-items: center; justify-content: center; gap: 0;
+      padding: 20px 24px; background: #fff; border-bottom: 1px solid #e8eaed;
+    }
+    .step {
+      display: flex; align-items: center; gap: 8px; padding: 10px 20px;
+      border-radius: 10px; font-size: 14px; font-weight: 600; color: #9ca3af;
+      transition: all .3s;
+    }
+    .step.active { background: #10b981; color: #fff; }
+    .step.done { color: #10b981; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d1d5db;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .step.active .step-num { border-color: #fff; background: rgba(255,255,255,.2); }
+    .step.done .step-num { border-color: #10b981; background: #10b981; color: #fff; }
+    .step-arrow { margin: 0 8px; color: #d1d5db; font-size: 18px; }
+
+    /* 主内容区 */
+    .main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+    /* 第一步：三栏布局 */
+    .step1-layout { display: grid; grid-template-columns: 280px 1fr 320px; gap: 20px; }
+
+    .panel {
+      background: #fff; border-radius: 16px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    .panel-title {
+      font-size: 13px; font-weight: 600; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .panel-title .dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
+
+    /* 左栏：订单信息 */
+    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-key { color: #6b7280; }
+    .info-val { color: #1a1a1a; font-weight: 600; word-break: break-all; max-width: 60%; text-align: right; }
+    .order-amount-box {
+      background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 12px;
+      padding: 16px; margin-top: 16px; text-align: center;
+    }
+    .order-amount-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .order-amount-value { font-size: 24px; font-weight: 800; color: #10b981; }
+
+    /* 中栏：选择网络和币种 */
+    .select-group { margin-bottom: 20px; }
+    .select-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+    .select-box {
+      width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+      background: #fff; font-size: 14px; font-weight: 500; color: #1a1a1a;
+      appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 16px center; cursor: pointer;
+      outline: none; transition: border-color .2s;
+    }
+    .select-box:focus { border-color: #10b981; }
+    .warning-box {
+      background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+      padding: 12px 14px; font-size: 13px; color: #92400e; line-height: 1.5;
+    }
+
+    /* 右栏：付款摘要 */
+    .summary-amount {
+      background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px;
+      padding: 20px; text-align: center; margin-bottom: 20px;
+    }
+    .summary-label { font-size: 13px; color: #6b7280; margin-bottom: 4px; }
+    .summary-value { font-size: 36px; font-weight: 800; color: #10b981; letter-spacing: -1px; }
+    .summary-network { font-size: 13px; color: #6b7280; margin-top: 4px; }
+
+    .countdown-box {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px;
+      padding: 14px 18px; margin-bottom: 20px;
+    }
+    .countdown-label { font-size: 14px; font-weight: 600; color: #374151; }
+    .countdown-value {
+      font-size: 28px; font-weight: 800; color: #10b981;
+      font-variant-numeric: tabular-nums; letter-spacing: 1px;
+    }
+    .countdown-value.warn { color: #f59e0b; }
+    .countdown-value.danger { color: #ef4444; }
+
+    .next-btn {
+      width: 100%; padding: 14px; background: #10b981; color: #fff; border: none;
+      border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: all .2s;
+    }
+    .next-btn:hover:not(:disabled) { background: #059669; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,.3); }
+    .next-btn:disabled { background: #d1d5db; cursor: not-allowed; }
+    .next-btn:active:not(:disabled) { transform: translateY(0); }
+    .next-hint { font-size: 12px; color: #9ca3af; margin-top: 12px; line-height: 1.5; }
+
+    /* 第二步：两栏布局 */
+    .step2-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    .qr-section { text-align: center; }
+    .qr-card {
+      background: #fff; border: 1.5px solid #e5e7eb; border-radius: 16px;
+      padding: 24px; display: inline-block; margin-bottom: 16px;
+    }
+    .qr-card img { display: block; width: 200px; height: 200px; border-radius: 8px; }
+    .qr-amount { font-size: 28px; font-weight: 800; color: #10b981; margin-top: 12px; }
+    .qr-network { font-size: 13px; color: #6b7280; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .copy-amount-btn {
+      display: inline-flex; align-items: center; gap: 4px; background: #f3f4f6;
+      border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer;
+      font-size: 12px; color: #6b7280; margin-left: 4px;
+    }
+    .copy-amount-btn:hover { background: #e5e7eb; }
+
+    /* 右栏：转账信息 */
+    .transfer-section { display: flex; flex-direction: column; gap: 16px; }
+    .transfer-title { font-size: 13px; font-weight: 600; color: #10b981; }
+    .transfer-heading { font-size: 20px; font-weight: 800; }
+    .address-label { font-size: 12px; color: #6b7280; font-weight: 500; margin-bottom: 6px; }
+    .address-card {
+      background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 10px;
+      padding: 12px 16px; word-break: break-all; font-size: 13px;
+      font-family: 'SFMono-Regular', Menlo, monospace; color: #374151; line-height: 1.5;
+    }
+    .copy-address-btn {
+      width: 100%; padding: 10px; background: #10b981; color: #fff; border: none;
+      border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all .15s;
+    }
+    .copy-address-btn:hover { background: #059669; }
+
+    .steps-list { list-style: none; }
+    .steps-list li {
+      display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
+      font-size: 13px; color: #374151; line-height: 1.5;
+    }
+    .steps-list .num {
+      width: 22px; height: 22px; border-radius: 50%; background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: #6b7280; flex-shrink: 0;
+    }
+
+    .back-btn {
+      width: 100%; padding: 12px; background: #fff; color: #374151; border: 1.5px solid #e5e7eb;
+      border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all .15s; margin-top: auto;
+    }
+    .back-btn:hover { border-color: #10b981; color: #10b981; }
+
+    .footer { text-align: center; padding: 16px; font-size: 12px; color: #d1d5db; }
+
+    /* 状态弹窗 */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100;
+      display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+    }
+    .overlay.show { display: flex; }
+    .overlay-card {
+      background: #fff; border-radius: 20px; padding: 40px 32px; max-width: 400px;
+      width: 90%; text-align: center; box-shadow: 0 24px 64px rgba(0,0,0,.2);
+    }
+    .overlay-icon { font-size: 48px; margin-bottom: 16px; }
+    .overlay-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .overlay-sub { font-size: 14px; color: #6b7280; margin-bottom: 24px; }
+    .overlay-btn {
+      display: inline-block; padding: 12px 32px; background: #10b981; color: #fff;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+    }
+
+    .loading { text-align: center; padding: 80px 24px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #f0f0f0; border-top-color: #10b981; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-80px);
+      background: #0d0d0d; color: #fff; padding: 10px 22px; border-radius: 24px;
+      font-size: 14px; font-weight: 500; z-index: 9999; opacity: 0; transition: all .3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #10b981; }
+    .toast.error { background: #ef4444; }
+
+    /* 手机适配 */
+    @media (max-width: 900px) {
+      .step1-layout { grid-template-columns: 1fr; }
+      .step2-layout { grid-template-columns: 1fr; }
+      .main { padding: 16px; }
+      .summary-value { font-size: 28px; }
+      .countdown-value { font-size: 24px; }
+      .steps { padding: 12px 16px; }
+      .step { padding: 8px 12px; font-size: 13px; }
+      .step-arrow { margin: 0 4px; }
+    }
+    @media (max-width: 480px) {
+      .topbar { padding: 12px 16px; }
+      .topbar-title { font-size: 14px; }
+      .order-amount-value { font-size: 20px; }
+      .summary-value { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo"><svg viewBox="0 0 24 24" fill="white"><path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/></svg></div>
+      <div>
+        <div class="topbar-title">OpenUSDT 收银台</div>
+        <div class="topbar-sub">商户支付会话</div>
+      </div>
+    </div>
+    <div class="status-badge" id="statusBadge"><span class="status-dot"></span> 等待付款</div>
+  </div>
+
+  <!-- 步骤指示器 -->
+  <div class="steps" id="stepsBar">
+    <div class="step active" id="step1"><div class="step-num">1</div> 选择支付方式</div>
+    <div class="step-arrow">→</div>
+    <div class="step" id="step2"><div class="step-num">2</div> 扫码或复制转账</div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main" id="app">
+    <div class="loading"><div class="spinner"></div><div style="color:#9ca3af;font-size:14px;">加载中...</div></div>
+  </div>
+
+  <div class="footer">Powered by OpenUSDT</div>
+  <div class="toast" id="toast"></div>
+
+  <!-- 状态弹窗 -->
+  <div class="overlay" id="overlay">
+    <div class="overlay-card" id="overlayCard"></div>
+  </div>
+
+  <script>
+    // ===== 获取 trade_id =====
+    let tradeId = new URLSearchParams(window.location.search).get('trade_id') || '';
+    if (!tradeId) {
+      const parts = window.location.pathname.split('/');
+      const last = parts[parts.length - 1] || '';
+      const prev = parts[parts.length - 2] || '';
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRe.test(last)) tradeId = last;
+      else if (uuidRe.test(prev)) tradeId = prev;
+    }
+
+    const API = 'https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com';
+    let pollTimer = null, countdownTimer = null, expiredAt = null, totalSeconds = 0;
+    let orderData = null, methods = [], selectedMethod = null;
+
+    // ===== 初始化 =====
+    async function init() {
+      if (!tradeId) { showError('缺少订单号'); return; }
+      try {
+        const resp = await fetch(`${API}/api/v1/pay/info`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trade_id: tradeId })
+        });
+        const data = await resp.json();
+        if (data.status_code !== 200) { showError(data.message); return; }
+
+        orderData = data.data;
+        const st = parseInt(orderData.status);
+        if (st === 2) { showSuccess(); return; }
+        if (st === 3 || st === 4) { showExpired(); return; }
+        if (st === 5) { showConfirming(); startPolling(); return; }
+
+        // 判断显示选择页还是付款页
+        // reselect=true → 始终显示选择页（create-order模式）
+        // reselect=false且有token → 直接显示付款页（create-transaction模式）
+        if (orderData.reselect) {
+          // 需要用户选择支付方式
+          setStep(1);
+          await loadMethods();
+          if (methods.length === 0) {
+            showError('暂无可用的支付方式');
+            return;
+          }
+          showSelection(orderData);
+        } else if (orderData.token && orderData.actual_amount) {
+          // 已有支付方式，直接显示付款页
+          setStep(2);
+          showPayment(orderData);
+        } else {
+          // 没有支付方式，显示选择页
+          setStep(1);
+          await loadMethods();
+          if (methods.length === 0) {
+            showError('暂无可用的支付方式');
+            return;
+          }
+          showSelection(orderData);
+        }
+        startPolling();
+      } catch (err) { showError('网络错误: ' + err.message); }
+    }
+
+    // ===== 加载支付方式 =====
+    async function loadMethods() {
+      try {
+        const resp = await fetch(`${API}/api/v1/pay/methods`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trade_id: tradeId })
+        });
+        const data = await resp.json();
+        if (data.status_code === 200 && data.data && data.data.methods) {
+          methods = data.data.methods;
+        } else {
+          methods = [];
+        }
+      } catch (e) {
+        console.error('加载支付方式失败', e);
+        methods = [];
+      }
+    }
+
+    // ===== 步骤指示器 =====
+    function setStep(n) {
+      const s1 = document.getElementById('step1');
+      const s2 = document.getElementById('step2');
+      s1.className = n === 1 ? 'step active' : 'step done';
+      s2.className = n === 2 ? 'step active' : n > 2 ? 'step done' : 'step';
+    }
+
+    // ===== 倒计时 =====
+    function startCountdown() {
+      // 先清除旧定时器
+      if (countdownTimer) clearInterval(countdownTimer);
+      updateCountdown();
+      countdownTimer = setInterval(updateCountdown, 1000);
+    }
+
+    function updateCountdown() {
+      if (!expiredAt) return;
+      const diff = Math.max(0, expiredAt - Date.now());
+      if (diff <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        showExpired();
+        return;
+      }
+      const hh = Math.floor(diff / 3600000);
+      const mm = Math.floor((diff % 3600000) / 60000);
+      const ss = Math.floor((diff % 60000) / 1000);
+      const el = document.getElementById('timerDisplay');
+      if (el) {
+        el.textContent = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+        const pct = diff / (totalSeconds * 1000);
+        el.className = 'countdown-value' + (pct <= 0.1 ? ' danger' : pct <= 0.3 ? ' warn' : '');
+      }
+    }
+
+    // ===== 轮询 =====
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const resp = await fetch(`${API}/api/v1/pay/info`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trade_id: tradeId })
+          });
+          const data = await resp.json();
+          if (data.status_code === 200) {
+            const newSt = parseInt(data.data.status);
+            const oldSt = orderData ? parseInt(orderData.status) : 0;
+            if (newSt !== oldSt) {
+              orderData = data.data;
+              if (newSt === 2) { stopTimers(); showSuccess(); }
+              else if (newSt === 3 || newSt === 4) { stopTimers(); showExpired(); }
+              else if (newSt === 5) { showConfirming(); }
+            }
+          }
+        } catch (e) {}
+      }, 5000);
+    }
+
+    function stopTimers() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    }
+
+    // ===== 第一步：选择支付方式 =====
+    function showSelection(order) {
+      const amount = order.amount || '0';
+      const fiat = order.fiat || 'CNY';
+
+      // 按网络分组
+      const networks = {};
+      methods.forEach(m => {
+        const net = m.network || 'unknown';
+        if (!networks[net]) networks[net] = [];
+        networks[net].push(m);
+      });
+      const netKeys = Object.keys(networks);
+
+      document.getElementById('app').innerHTML = `
+        <div class="step1-layout">
+          <!-- 左栏：订单信息 -->
+          <div class="panel">
+            <div class="panel-title"><span class="dot"></span> 订单信息</div>
+            <div class="info-row"><span class="info-key">商户订单</span><span class="info-val">${order.order_id || '--'}</span></div>
+            <div class="info-row"><span class="info-key">商品</span><span class="info-val">${order.name || '数字商品'}</span></div>
+            <div class="info-row"><span class="info-key">交易编号</span><span class="info-val" style="font-size:11px;">${tradeId.substring(0, 18)}...</span></div>
+            <div class="order-amount-box">
+              <div class="order-amount-label">订单金额</div>
+              <div class="order-amount-value">¥${amount} ${fiat}</div>
+            </div>
+          </div>
+
+          <!-- 中栏：选择网络和币种 -->
+          <div class="panel">
+            <div class="panel-title"><span class="dot"></span> 选择网络与币种</div>
+            <div class="select-group">
+              <div class="select-label">网络</div>
+              <select class="select-box" id="netSelect" onchange="onNetworkChange()">
+                ${netKeys.map((k, i) => {
+                  const label = k.toUpperCase();
+                  const count = networks[k].length;
+                  const currencies = [...new Set(networks[k].map(m => m.currency))].join(', ');
+                  return `<option value="${k}" ${i===0?'selected':''}>${label} · 可用${count}种: ${currencies}</option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div class="select-group">
+              <div class="select-label">币种</div>
+              <select class="select-box" id="curSelect" onchange="onCurrencyChange()">
+              </select>
+            </div>
+            <div class="warning-box">
+              ⚠️ 请仔细核对网络和币种<br>
+              转账前请确认钱包中选择的网络和币种与页面完全一致。转错网络或币种可能导致资产永久丢失。
+            </div>
+          </div>
+
+          <!-- 右栏：付款摘要 -->
+          <div class="panel" style="display:flex;flex-direction:column;">
+            <div class="summary-amount">
+              <div class="summary-label">需支付</div>
+              <div class="summary-value" id="summaryAmount">-- USDT</div>
+              <div class="summary-network" id="summaryNetwork">--</div>
+            </div>
+            <div class="countdown-box">
+              <div class="countdown-label">剩余时间</div>
+              <div class="countdown-value" id="timerDisplay">--:--</div>
+            </div>
+            <button class="next-btn" id="nextBtn" disabled onclick="confirmSelection()">下一步</button>
+            <div class="next-hint">下一步将锁定本次支付方式，并显示专属收款地址和二维码。转账金额务必与页面展示金额一致。</div>
+          </div>
+        </div>
+      `;
+
+      // 初始化网络/币种
+      window._networks = networks;
+      onNetworkChange();
+
+      // 倒计时
+      if (order.expired_at) {
+        expiredAt = new Date(order.expired_at * 1000);
+        totalSeconds = order.timeout || 600;
+        startCountdown();
+      }
+    }
+
+    function onNetworkChange() {
+      const netSelect = document.getElementById('netSelect');
+      if (!netSelect) return;
+      const net = netSelect.value;
+      const curSelect = document.getElementById('curSelect');
+      const items = window._networks[net] || [];
+      curSelect.innerHTML = items.map((m, i) =>
+        `<option value="${i}">${m.currency} · ${m.token_net_name}${m.is_popular ? ' ⭐' : ''}</option>`
+      ).join('');
+      onCurrencyChange();
+    }
+
+    function onCurrencyChange() {
+      const netSelect = document.getElementById('netSelect');
+      const curSelect = document.getElementById('curSelect');
+      if (!netSelect || !curSelect) return;
+      const net = netSelect.value;
+      const curIdx = parseInt(curSelect.value);
+      const items = window._networks[net] || [];
+      const m = items[curIdx];
+      if (m) {
+        selectedMethod = m;
+        const amountEl = document.getElementById('summaryAmount');
+        const networkEl = document.getElementById('summaryNetwork');
+        const btnEl = document.getElementById('nextBtn');
+        if (amountEl) amountEl.textContent = m.actual_amount + ' ' + m.currency;
+        if (networkEl) networkEl.textContent = m.network.toUpperCase();
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    async function confirmSelection() {
+      if (!selectedMethod) return;
+      const btn = document.getElementById('nextBtn');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = '处理中...';
+      try {
+        const resp = await fetch(`${API}/api/v1/pay/update-order`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trade_id: tradeId, currency: selectedMethod.currency, network: selectedMethod.network })
+        });
+        const data = await resp.json();
+        if (data.status_code === 200) {
+          // 更新本地订单数据
+          if (data.data) {
+            orderData.actual_amount = data.data.actual_amount;
+            orderData.token = data.data.token;
+            orderData.currency = data.data.currency || selectedMethod.currency;
+            orderData.network = data.data.network || selectedMethod.network;
+          }
+          setStep(2);
+          showPayment(orderData);
+        } else {
+          showToast(data.message || '操作失败', 'error');
+          btn.disabled = false;
+          btn.textContent = '下一步';
+        }
+      } catch (e) {
+        showToast('网络错误: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '下一步';
+      }
+    }
+
+    // ===== 第二步：显示付款信息 =====
+    function showPayment(order) {
+      const actualAmount = order.actual_amount || '--';
+      const token = order.token || '';
+      const currency = order.currency || 'USDT';
+      const network = (order.network || 'bsc').toUpperCase();
+
+      document.getElementById('app').innerHTML = `
+        <div class="step2-layout">
+          <!-- 左栏：二维码 -->
+          <div class="panel qr-section">
+            <div class="qr-card">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(token)}" alt="QR Code" />
+            </div>
+            <div style="font-size:13px;color:#6b7280;">支付金额</div>
+            <div class="qr-amount">
+              ◆ ${actualAmount} ${currency}
+              <button class="copy-amount-btn" onclick="copyText('${actualAmount}')">📋</button>
+            </div>
+            <div class="qr-network">⬡ ${network}</div>
+          </div>
+
+          <!-- 右栏：转账信息 -->
+          <div class="panel transfer-section">
+            <div class="transfer-title">转账信息</div>
+            <div class="transfer-heading">扫码或复制地址完成付款</div>
+            <div>
+              <div class="address-label">收款地址</div>
+              <div class="address-card">${token}</div>
+            </div>
+            <button class="copy-address-btn" onclick="copyAddr()">复制地址</button>
+            <ol class="steps-list">
+              <li><span class="num">01</span> 使用当前页面选择的 ${network} 网络</li>
+              <li><span class="num">02</span> 精确转入 ${actualAmount} ${currency}</li>
+              <li><span class="num">03</span> 转账后保持页面打开，系统会自动确认订单</li>
+            </ol>
+            <button class="back-btn" onclick="goBack()">← 返回上一步</button>
+          </div>
+        </div>
+      `;
+
+      // 倒计时
+      if (order.expired_at) {
+        expiredAt = new Date(order.expired_at * 1000);
+        totalSeconds = order.timeout || 600;
+        startCountdown();
+      }
+    }
+
+    async function goBack() {
+      setStep(1);
+      // 先清空内容显示loading
+      document.getElementById('app').innerHTML = '<div class="loading"><div class="spinner"></div><div style="color:#9ca3af;font-size:14px;">加载中...</div></div>';
+      await loadMethods();
+      if (methods.length === 0) {
+        showError('暂无可用的支付方式');
+        return;
+      }
+      showSelection(orderData);
+    }
+
+    // ===== 状态弹窗 =====
+    function showSuccess() {
+      stopTimers();
+      setStep(3);
+      updateBadge('支付成功', '#10b981');
+      document.getElementById('app').innerHTML = `
+        <div class="overlay-card" style="margin:40px auto;max-width:400px;background:#fff;padding:48px 32px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.08);text-align:center;">
+          <div class="overlay-icon">✅</div>
+          <div class="overlay-title">支付成功！</div>
+          <div class="overlay-sub">您的付款已确认，交易已完成</div>
+          ${orderData.redirect_url ? `<a href="${orderData.redirect_url}" class="overlay-btn">返回商户平台</a>` : ''}
+        </div>
+      `;
+    }
+
+    function showExpired() {
+      stopTimers();
+      setStep(3);
+      updateBadge('已过期', '#ef4444');
+      document.getElementById('app').innerHTML = `
+        <div class="overlay-card" style="margin:40px auto;max-width:400px;background:#fff;padding:48px 32px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.08);text-align:center;">
+          <div class="overlay-icon">⏰</div>
+          <div class="overlay-title">订单已过期</div>
+          <div class="overlay-sub">支付时间已超时，请重新发起支付</div>
+          ${orderData.redirect_url ? `<a href="${orderData.redirect_url}" class="overlay-btn" style="background:#6b7280;">返回商户平台</a>` : ''}
+        </div>
+      `;
+    }
+
+    function showConfirming() {
+      updateBadge('确认中', '#f59e0b');
+      document.getElementById('app').innerHTML = `
+        <div class="overlay-card" style="margin:40px auto;max-width:400px;background:#fff;padding:48px 32px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.08);text-align:center;">
+          <div class="spinner" style="width:56px;height:56px;border-width:4px;"></div>
+          <div class="overlay-title">交易确认中</div>
+          <div class="overlay-sub">检测到付款，区块链网络确认中...</div>
+          <div style="font-size:13px;color:#9ca3af;">预计确认时间：1-3 分钟</div>
+        </div>
+      `;
+    }
+
+    function showError(msg) {
+      stopTimers();
+      document.getElementById('app').innerHTML = `<div class="overlay-card" style="margin:40px auto;max-width:400px;background:#fff;padding:48px 32px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.08);text-align:center;"><div class="overlay-icon">⚠️</div><div class="overlay-title">${msg}</div></div>`;
+    }
+
+    function updateBadge(text, color) {
+      const badge = document.getElementById('statusBadge');
+      if (badge) {
+        badge.innerHTML = `<span class="status-dot" style="background:${color};"></span> ${text}`;
+        badge.style.background = color + '15';
+        badge.style.color = color;
+      }
+    }
+
+    // ===== 工具 =====
+    function copyAddr() {
+      const addr = orderData ? orderData.token : '';
+      if (!addr) { showToast('地址为空', 'error'); return; }
+      navigator.clipboard.writeText(addr).then(
+        () => showToast('地址已复制', 'success'),
+        () => showToast('复制失败', 'error')
+      );
+    }
+
+    function copyText(text) {
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(
+        () => showToast('金额已复制', 'success'),
+        () => showToast('复制失败', 'error')
+      );
+    }
+
+    function showToast(msg, type) {
+      const el = document.getElementById('toast');
+      if (!el) return;
+      el.textContent = msg;
+      el.className = 'toast ' + (type || '') + ' show';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.className = 'toast'; }, 3000);
+    }
+
+    init();
+  </script>
+</body>
+</html>

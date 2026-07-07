@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenUSDT 管理后台 - 登录</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+      width: 100%;
+      max-width: 400px;
+      padding: 40px 32px;
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .login-logo {
+      width: 56px; height: 56px;
+      background: #0d0d0d;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .login-logo svg { width: 36px; height: 36px; }
+    .login-title { font-size: 22px; font-weight: 700; color: #0d0d0d; margin-bottom: 4px; }
+    .login-subtitle { font-size: 14px; color: #6b7280; }
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 15px;
+      color: #0d0d0d;
+      background: #fff;
+      transition: border-color .2s;
+      outline: none;
+    }
+    .form-input:focus { border-color: #0d0d0d; box-shadow: 0 0 0 3px rgba(0,0,0,.06); }
+    .form-input::placeholder { color: #9ca3af; }
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: #0d0d0d;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .login-btn:hover { background: #1a1a1a; }
+    .login-btn:disabled { background: #d1d5db; cursor: not-allowed; }
+    .login-btn:active { transform: translateY(1px); }
+    .login-hint {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    .login-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #dc2626;
+      margin-bottom: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="white">
+          <path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/>
+          <path d="M10 3.5V2h1.5v1.5H10zM13 3.5V2h1.5v1.5H13zM10 22v-1.5h1.5V22H10zM13 22v-1.5h1.5V22H13z"/>
+        </svg>
+      </div>
+      <div class="login-title">OpenUSDT 管理后台</div>
+      <div class="login-subtitle">支付网关管理系统</div>
+    </div>
+    <div class="login-error" id="errorMsg"></div>
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label">用户名</label>
+        <input class="form-input" type="text" id="username" placeholder="请输入用户名" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">密码</label>
+        <input class="form-input" type="password" id="password" placeholder="请输入密码" autocomplete="current-password" required>
+      </div>
+      <button class="login-btn" type="submit" id="loginBtn">登 录</button>
+    </form>
+    <div class="login-hint">首次登录将自动设置密码</div>
+  </div>
+
+  <script src="admin-common.js"></script>
+  <script>
+    (function () {
+      // 已登录则跳转到首页
+      if (Admin.isLoggedIn()) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      document.getElementById('loginForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = document.getElementById('loginBtn');
+        var errEl = document.getElementById('errorMsg');
+        var username = document.getElementById('username').value.trim();
+        var password = document.getElementById('password').value;
+
+        if (!username || !password) {
+          errEl.textContent = '请输入用户名和密码';
+          errEl.style.display = 'block';
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '登录中...';
+        errEl.style.display = 'none';
+
+        Admin.request('/api/admin/login', { username: username, password: password })
+          .then(function (res) {
+            if (res.status_code === 200 && res.data && res.data.token) {
+              Admin.setToken(res.data.token);
+              Admin.showToast('登录成功', 'success');
+              setTimeout(function () { window.location.href = 'index.html'; }, 500);
+            } else {
+              errEl.textContent = res.message || '登录失败';
+              errEl.style.display = 'block';
+              btn.disabled = false;
+              btn.textContent = '登 录';
+            }
+          })
+          .catch(function (err) {
+            errEl.textContent = '网络错误: ' + err.message;
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = '登 录';
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

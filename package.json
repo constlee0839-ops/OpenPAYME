@@ -1,0 +1,17 @@
+{
+  "name": "bepusdt-lambda",
+  "version": "2.0.0",
+  "description": "BEpusdt 兼容支付网关 - AWS Lambda 版",
+  "main": "src/api.js",
+  "scripts": {
+    "setup": "node setup-db.js",
+    "package": "powershell -Command \"Compress-Archive -Path node_modules, src, package.json -DestinationPath bepusdt-lambda.zip -Force\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.700.0",
+    "@libsql/client": "^0.17.4",
+    "@libsql/linux-x64-gnu": "^0.5.29",
+    "@libsql/win32-x64-msvc": "^0.5.29",
+    "ethers": "^6.13.0"
+  }
+}

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenUSDT 管理后台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; }
+
+    /* 侧边栏 */
+    .sidebar {
+      width: 220px; background: #0d0d0d; color: #fff; min-height: 100vh;
+      position: fixed; top: 0; left: 0; z-index: 100;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-brand {
+      padding: 20px; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .sidebar-brand svg { width: 28px; height: 28px; }
+    .sidebar-brand span { font-size: 16px; font-weight: 700; }
+    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; color: rgba(255,255,255,.6); text-decoration: none;
+      font-size: 14px; font-weight: 500; transition: all .15s; cursor: pointer;
+    }
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-item.active { color: #fff; background: rgba(255,255,255,.12); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-footer {
+      padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.1);
+      font-size: 12px; color: rgba(255,255,255,.4); text-align: center;
+    }
+
+    /* 主内容区 */
+    .main { flex: 1; margin-left: 220px; padding: 24px; }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .page-title { font-size: 22px; font-weight: 700; color: #0d0d0d; }
+    .page-actions { display: flex; gap: 8px; }
+
+    /* 按钮 */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer; transition: all .15s; text-decoration: none;
+    }
+    .btn-primary { background: #0d0d0d; color: #fff; }
+    .btn-primary:hover { background: #1a1a1a; }
+    .btn-success { background: #10b981; color: #fff; }
+    .btn-success:hover { background: #059669; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-outline {
+      background: #fff; color: #374151; border: 1.5px solid #e5e7eb;
+    }
+    .btn-outline:hover { border-color: #9ca3af; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* 卡片 */
+    .card {
+      background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      padding: 20px; margin-bottom: 16px;
+    }
+
+    /* 统计卡片 */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06); border-left: 4px solid;
+    }
+    .stat-label { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 800; color: #0d0d0d; letter-spacing: -1px; }
+    .stat-sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+
+    /* 表格 */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 12px 14px; font-weight: 600; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; white-space: nowrap; }
+    td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+    tr:hover td { background: #f9fafb; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    /* 状态标签 */
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+    }
+
+    /* 表单 */
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-label { font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+    .form-input, .form-select {
+      padding: 8px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px;
+      font-size: 13px; color: #0d0d0d; background: #fff; outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: #0d0d0d; }
+
+    /* 分页 */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; }
+    .pagination button {
+      padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px;
+      background: #fff; cursor: pointer; font-size: 13px;
+    }
+    .pagination button.active { background: #0d0d0d; color: #fff; border-color: #0d0d0d; }
+    .pagination button:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* 弹窗 */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200;
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 500px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.2); max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px 0; font-size: 17px; font-weight: 700;
+    }
+    .modal-close {
+      width: 32px; height: 32px; border-radius: 50%; border: none;
+      background: #f3f4f6; cursor: pointer; font-size: 18px; color: #6b7280;
+    }
+    .modal-body { padding: 20px 24px; }
+    .modal-footer {
+      padding: 16px 24px; display: flex; justify-content: flex-end; gap: 8px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    /* 空状态 */
+    .empty-state { text-align: center; padding: 40px 20px; color: #9ca3af; }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: .4; }
+
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="white">
+        <path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/>
+      </svg>
+      <span>OpenUSDT</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="index.html" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        首页
+      </a>
+      <a class="nav-item" href="wallets.html" data-page="wallets">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
+        钱包管理
+      </a>
+      <a class="nav-item" href="orders.html" data-page="orders">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        交易订单
+      </a>
+      <a class="nav-item" href="settings.html" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        基本设置
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="userInfo">管理员</span> · <a href="#" id="logoutBtn" style="color:rgba(255,255,255,.6);text-decoration:none;">退出</a>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <!-- 首页/统计面板 -->
+    <div id="page-dashboard">
+      <div class="page-header">
+        <h1 class="page-title">首页</h1>
+        <div class="page-actions">
+          <button class="btn btn-outline" onclick="loadDashboard()">刷新数据</button>
+        </div>
+      </div>
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card" style="border-color:#3b82f6">
+          <div class="stat-label">订单总数</div>
+          <div class="stat-value" id="statTotal">--</div>
+          <div class="stat-sub" id="statToday">今日 --</div>
+        </div>
+        <div class="stat-card" style="border-color:#10b981">
+          <div class="stat-label">已支付订单</div>
+          <div class="stat-value" id="statSuccess">--</div>
+          <div class="stat-sub" id="statAmount">收款 -- USDT</div>
+        </div>
+        <div class="stat-card" style="border-color:#f59e0b">
+          <div class="stat-label">待支付订单</div>
+          <div class="stat-value" id="statPending">--</div>
+        </div>
+        <div class="stat-card" style="border-color:#ef4444">
+          <div class="stat-label">失败/过期</div>
+          <div class="stat-value" id="statFailed">--</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">最近7天趋势</h3>
+        <div id="trendChart" style="min-height:200px;color:#9ca3af;text-align:center;padding:40px;">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗容器 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span id="modalTitle">标题</span>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <script src="admin-common.js"></script>
+  <script>
+    if (!Admin.requireAuth()) throw new Error('not logged in');
+
+    // 加载管理员信息
+    Admin.request('/api/admin/info', {}, 'POST').then(function (res) {
+      if (res.data) document.getElementById('userInfo').textContent = res.data.username;
+    });
+
+    // 退出登录
+    document.getElementById('logoutBtn').addEventListener('click', function (e) {
+      e.preventDefault();
+      Admin.request('/api/admin/logout', {}).then(function () {
+        Admin.clearToken();
+        window.location.href = 'login.html';
+      });
+    });
+
+    // 弹窗
+    function openModal(title, bodyHtml, footerHtml) {
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalBody').innerHTML = bodyHtml;
+      document.getElementById('modalFooter').innerHTML = footerHtml || '';
+      document.getElementById('modalOverlay').classList.add('show');
+    }
+    function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+    window.openModal = openModal;
+    window.closeModal = closeModal;
+
+    // 加载统计
+    function loadDashboard() {
+      Admin.request('/api/admin/dashboard', {}).then(function (res) {
+        if (res.status_code !== 200) return;
+        var d = res.data;
+        document.getElementById('statTotal').textContent = d.totalOrders || 0;
+        document.getElementById('statToday').textContent = '今日 ' + (d.todayOrders || 0);
+        document.getElementById('statSuccess').textContent = d.successOrders || 0;
+        document.getElementById('statAmount').textContent = '收款 ' + (parseFloat(d.successAmount || 0)).toFixed(2) + ' USDT';
+        document.getElementById('statPending').textContent = d.pendingOrders || 0;
+        document.getElementById('statFailed').textContent = (d.failedOrders || 0) + (d.expiredOrders || 0);
+
+        // 趋势图（简单文本版）
+        if (d.trend && d.trend.length) {
+          var html = '<table style="width:100%"><thead><tr><th>日期</th><th>总订单</th><th>已支付</th><th>收款(USDT)</th></tr></thead><tbody>';
+          d.trend.forEach(function (t) {
+            html += '<tr><td>' + t.date + '</td><td>' + t.total + '</td><td>' + (t.paid || 0) + '</td><td>' + (parseFloat(t.amount || 0)).toFixed(2) + '</td></tr>';
+          });
+          html += '</tbody></table>';
+          document.getElementById('trendChart').innerHTML = html;
+        } else {
+          document.getElementById('trendChart').innerHTML = '暂无数据';
+        }
+      });
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

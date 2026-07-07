@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenUSDT - 基本设置</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; }
+    .sidebar { width: 220px; background: #0d0d0d; color: #fff; min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100; display: flex; flex-direction: column; }
+    .sidebar-brand { padding: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .sidebar-brand svg { width: 28px; height: 28px; }
+    .sidebar-brand span { font-size: 16px; font-weight: 700; }
+    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: rgba(255,255,255,.6); text-decoration: none; font-size: 14px; font-weight: 500; transition: all .15s; }
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-item.active { color: #fff; background: rgba(255,255,255,.12); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.1); font-size: 12px; color: rgba(255,255,255,.4); text-align: center; }
+    .main { flex: 1; margin-left: 220px; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-title { font-size: 22px; font-weight: 700; color: #0d0d0d; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all .15s; }
+    .btn-primary { background: #0d0d0d; color: #fff; }
+    .btn-primary:hover { background: #1a1a1a; }
+    .btn-outline { background: #fff; color: #374151; border: 1.5px solid #e5e7eb; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); padding: 24px; margin-bottom: 16px; }
+    .card-title { font-size: 16px; font-weight: 700; color: #0d0d0d; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .form-input { width: 100%; max-width: 500px; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 14px; color: #0d0d0d; background: #fff; outline: none; }
+    .form-input:focus { border-color: #0d0d0d; }
+    .form-hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+    .token-display {
+      display: flex; align-items: center; gap: 10px;
+      background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 8px;
+      padding: 10px 14px; max-width: 500px;
+    }
+    .token-display code { flex: 1; font-size: 14px; font-family: 'SFMono-Regular', Menlo, monospace; color: #0d0d0d; word-break: break-all; }
+    .info-text { font-size: 13px; color: #6b7280; line-height: 1.6; }
+    @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg viewBox="0 0 24 24" fill="white"><path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/><path d="M10 3.5V2h1.5v1.5H10zM13 3.5V2h1.5v1.5H13zM10 22v-1.5h1.5V22H10zM13 22v-1.5h1.5V22H13z"/></svg>
+      <span>OpenUSDT</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>首页</a>
+      <a class="nav-item" href="wallets.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>钱包管理</a>
+      <a class="nav-item" href="orders.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>交易订单</a>
+      <a class="nav-item active" href="settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>基本设置</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn" style="color:rgba(255,255,255,.6);text-decoration:none;">退出登录</a></div>
+  </aside>
+
+  <div class="main">
+    <div class="page-header">
+      <h1 class="page-title">基本设置</h1>
+    </div>
+
+    <!-- API 设置 -->
+    <div class="card">
+      <div class="card-title">API 设置</div>
+      <div class="form-group">
+        <label class="form-label">API 对接令牌</label>
+        <div class="token-display">
+          <code id="apiToken">加载中...</code>
+          <button class="btn btn-outline" onclick="copyToken()" style="white-space:nowrap;">复制</button>
+        </div>
+        <div class="form-hint">这是商户调用 API 时使用的认证令牌，请妥善保管。</div>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" onclick="resetToken()">重置 Token</button>
+        <div class="form-hint" style="margin-top:8px;color:#ef4444;">重置后旧 Token 立即失效，商户需要更新对接令牌。</div>
+      </div>
+    </div>
+
+    <!-- 收银台设置 -->
+    <div class="card">
+      <div class="card-title">收银台设置</div>
+      <div class="form-group">
+        <label class="form-label">应用 URL（前台收银台地址）</label>
+        <input class="form-input" id="checkoutUrl" placeholder="https://pay.u222.eu.org">
+        <div class="form-hint">收银台页面的访问地址，用于生成支付链接。</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">汇率</label>
+        <input class="form-input" id="usdtRate" placeholder="7.2" style="max-width:200px;">
+        <div class="form-hint">USDT 对 CNY 的汇率。支持浮动语法：~1.02（乘）、+0.3（加）、-0.2（减）。</div>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+      </div>
+    </div>
+
+    <!-- 修改密码 -->
+    <div class="card">
+      <div class="card-title">修改密码</div>
+      <div class="form-group">
+        <label class="form-label">旧密码</label>
+        <input class="form-input" id="oldPwd" type="password" placeholder="输入当前密码" style="max-width:300px;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">新密码</label>
+        <input class="form-input" id="newPwd" type="password" placeholder="输入新密码" style="max-width:300px;">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" onclick="changePassword()">修改密码</button>
+      </div>
+    </div>
+
+    <!-- 系统信息 -->
+    <div class="card">
+      <div class="card-title">系统信息</div>
+      <div class="info-text">
+        <p><strong>项目名称：</strong>OpenUSDT 支付网关</p>
+        <p><strong>架构：</strong>AWS Lambda + Turso + Cloudflare Pages</p>
+        <p><strong>支付域名：</strong>https://pay.u222.eu.org</p>
+        <p><strong>API 地址：</strong>https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com</p>
+        <p><strong>管理后台：</strong>https://pay.u222.eu.org/admin/</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin-common.js"></script>
+  <script>
+    if (!Admin.requireAuth()) throw new Error('not logged in');
+
+    document.getElementById('logoutBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      Admin.request('/api/admin/logout', {}).then(function() { Admin.clearToken(); window.location.href = 'login.html'; });
+    });
+
+    // 加载配置
+    function loadConfig() {
+      Admin.request('/api/admin/config', {}, 'GET').then(function (res) {
+        if (res.status_code !== 200) return;
+        var cfg = res.data || {};
+        document.getElementById('apiToken').textContent = cfg.api_auth_token || '--';
+        document.getElementById('checkoutUrl').value = cfg.checkout_url || 'https://pay.u222.eu.org';
+        document.getElementById('usdtRate').value = cfg.usdt_rate || '7.2';
+      }).catch(function() {
+        document.getElementById('apiToken').textContent = '加载失败';
+      });
+    }
+
+    function copyToken() {
+      var text = document.getElementById('apiToken').textContent;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function () { Admin.showToast('已复制', 'success'); });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        Admin.showToast('已复制', 'success');
+      }
+    }
+
+    function resetToken() {
+      if (!confirm('确定要重置 API Token 吗？旧 Token 会立即失效！')) return;
+      Admin.request('/api/admin/reset-token', {}).then(function (res) {
+        if (res.status_code === 200) {
+          Admin.showToast('Token 已重置', 'success');
+          document.getElementById('apiToken').textContent = res.data.token;
+        } else {
+          Admin.showToast(res.message || '重置失败', 'error');
+        }
+      });
+    }
+
+    function saveSettings() {
+      var rate = document.getElementById('usdtRate').value.trim();
+      var url = document.getElementById('checkoutUrl').value.trim();
+
+      var promises = [];
+      if (rate) promises.push(Admin.request('/api/admin/config', { key: 'usdt_rate', value: rate }));
+      if (url) promises.push(Admin.request('/api/admin/config', { key: 'checkout_url', value: url }));
+
+      Promise.all(promises).then(function () {
+        Admin.showToast('保存成功', 'success');
+      });
+    }
+
+    function changePassword() {
+      var oldPwd = document.getElementById('oldPwd').value;
+      var newPwd = document.getElementById('newPwd').value;
+      if (!oldPwd || !newPwd) { Admin.showToast('请输入旧密码和新密码', 'error'); return; }
+      Admin.request('/api/admin/set-password', { old_password: oldPwd, new_password: newPwd }).then(function (res) {
+        if (res.status_code === 200) {
+          Admin.showToast('密码修改成功', 'success');
+          document.getElementById('oldPwd').value = '';
+          document.getElementById('newPwd').value = '';
+        } else {
+          Admin.showToast(res.message || '修改失败', 'error');
+        }
+      });
+    }
+
+    loadConfig();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+/pay/checkout-counter/:trade_id  /checkout-counter.html?trade_id=:trade_id  200
