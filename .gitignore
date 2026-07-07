@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.zip
+*.tar.gz
+
+# Environment files
+.env
+.env.local
+
+# Sensitive files
+PROJECT_STATUS.md
+scan-test.json
+scan-response.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Runtime
+tmp/
+temp/
+
+# Lambda deployment
+.bundled/

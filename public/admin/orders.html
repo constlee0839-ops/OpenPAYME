@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenUSDT - 交易订单</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; }
+    .sidebar { width: 220px; background: #0d0d0d; color: #fff; min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100; display: flex; flex-direction: column; }
+    .sidebar-brand { padding: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
+    .sidebar-brand svg { width: 28px; height: 28px; }
+    .sidebar-brand span { font-size: 16px; font-weight: 700; }
+    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: rgba(255,255,255,.6); text-decoration: none; font-size: 14px; font-weight: 500; transition: all .15s; }
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-item.active { color: #fff; background: rgba(255,255,255,.12); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,.1); font-size: 12px; color: rgba(255,255,255,.4); text-align: center; }
+    .main { flex: 1; margin-left: 220px; padding: 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-title { font-size: 22px; font-weight: 700; color: #0d0d0d; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all .15s; }
+    .btn-primary { background: #0d0d0d; color: #fff; }
+    .btn-primary:hover { background: #1a1a1a; }
+    .btn-success { background: #10b981; color: #fff; }
+    .btn-outline { background: #fff; color: #374151; border: 1.5px solid #e5e7eb; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); padding: 20px; margin-bottom: 16px; }
+
+    /* 筛选栏 */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+    .filter-bar .form-group { display: flex; flex-direction: column; }
+    .filter-bar .form-label { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .filter-bar .form-input, .filter-bar .form-select { padding: 8px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; font-weight: 600; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; color: #374151; }
+    tr:hover td { background: #f9fafb; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .addr-cell { font-family: 'SFMono-Regular', Menlo, monospace; font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; }
+    .pagination button { padding: 6px 12px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
+    .pagination button.active { background: #0d0d0d; color: #fff; border-color: #0d0d0d; }
+    .pagination button:disabled { opacity: .4; cursor: not-allowed; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-card { background: #fff; border-radius: 16px; width: 100%; max-width: 600px; box-shadow: 0 24px 64px rgba(0,0,0,.2); max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; font-size: 17px; font-weight: 700; }
+    .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: #f3f4f6; cursor: pointer; font-size: 18px; color: #6b7280; }
+    .modal-body { padding: 20px 24px; }
+    .modal-body .detail-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .detail-label { width: 100px; color: #6b7280; font-size: 13px; flex-shrink: 0; }
+    .detail-value { flex: 1; font-size: 13px; color: #0d0d0d; word-break: break-all; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #9ca3af; }
+    @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <svg viewBox="0 0 24 24" fill="white"><path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/><path d="M10 3.5V2h1.5v1.5H10zM13 3.5V2h1.5v1.5H13zM10 22v-1.5h1.5V22H10zM13 22v-1.5h1.5V22H13z"/></svg>
+      <span>OpenUSDT</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>首页</a>
+      <a class="nav-item" href="wallets.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>钱包管理</a>
+      <a class="nav-item active" href="orders.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>交易订单</a>
+      <a class="nav-item" href="settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>基本设置</a>
+    </nav>
+    <div class="sidebar-footer"><a href="#" id="logoutBtn" style="color:rgba(255,255,255,.6);text-decoration:none;">退出登录</a></div>
+  </aside>
+
+  <div class="main">
+    <div class="page-header">
+      <h1 class="page-title">交易订单</h1>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="card">
+      <div class="filter-bar">
+        <div class="form-group">
+          <label class="form-label">搜索</label>
+          <input class="form-input" id="fKeyword" placeholder="商户订单号/交易ID" style="width:200px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">交易类型</label>
+          <select class="form-select" id="fTradeType" style="width:160px;">
+            <option value="">全部</option>
+            <option value="usdt.bep20">USDT-BEP20</option>
+            <option value="usdt.erc20">USDT-ERC20</option>
+            <option value="usdt.trc20">USDT-TRC20</option>
+            <option value="usdt.polygon">USDT-Polygon</option>
+            <option value="usdc.bep20">USDC-BEP20</option>
+            <option value="usdc.polygon">USDC-Polygon</option>
+            <option value="tron.trx">TRX-TRON</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">状态</label>
+          <select class="form-select" id="fStatus" style="width:120px;">
+            <option value="">全部</option>
+            <option value="1">待支付</option>
+            <option value="2">已支付</option>
+            <option value="3">已过期</option>
+            <option value="4">已取消</option>
+            <option value="5">确认中</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <button class="btn btn-primary" onclick="search()">查询</button>
+          <button class="btn btn-outline" onclick="resetFilter()" style="margin-top:4px;">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 订单列表 -->
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>商户订单</th>
+              <th>交易类型</th>
+              <th>金额</th>
+              <th>实付</th>
+              <th>收款地址</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th class="text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody id="orderList"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState" style="display:none;">暂无订单</div>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- 详情弹窗 -->
+  <div class="modal-overlay" id="detailOverlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>订单详情</span>
+        <button class="modal-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">&times;</button>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+
+  <script src="admin-common.js"></script>
+  <script>
+    if (!Admin.requireAuth()) throw new Error('not logged in');
+
+    document.getElementById('logoutBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      Admin.request('/api/admin/logout', {}).then(function() { Admin.clearToken(); window.location.href = 'login.html'; });
+    });
+
+    var currentPage = 1, total = 0, pageSize = 15;
+
+    function search() { currentPage = 1; loadOrders(); }
+    function resetFilter() {
+      document.getElementById('fKeyword').value = '';
+      document.getElementById('fTradeType').value = '';
+      document.getElementById('fStatus').value = '';
+      currentPage = 1;
+      loadOrders();
+    }
+
+    function loadOrders() {
+      var data = {
+        page: currentPage,
+        pageSize: pageSize,
+        keyword: document.getElementById('fKeyword').value.trim() || undefined,
+        trade_type: document.getElementById('fTradeType').value || undefined,
+        status: document.getElementById('fStatus').value !== '' ? document.getElementById('fStatus').value : undefined,
+      };
+      Admin.request('/api/admin/order/list', data).then(function (res) {
+        if (res.status_code !== 200) return;
+        total = res.data.total || 0;
+        renderOrders(res.data.data || []);
+        renderPagination();
+      });
+    }
+
+    function renderOrders(orders) {
+      var tbody = document.getElementById('orderList');
+      var empty = document.getElementById('emptyState');
+      if (!orders.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+      tbody.innerHTML = orders.map(function (o) {
+        var sc = Admin.statusColor(o.status);
+        var badge = '<span class="badge" style="background:' + sc + '20;color:' + sc + ';">' + Admin.statusText(o.status) + '</span>';
+        return '<tr>'
+          + '<td>' + (o.order_id || '--') + '</td>'
+          + '<td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:11px;">' + (o.trade_type || '--') + '</code></td>'
+          + '<td>' + (o.amount || '0') + ' ' + (o.fiat || 'CNY') + '</td>'
+          + '<td>' + (o.actual_amount || '--') + ' USDT</td>'
+          + '<td class="addr-cell" title="' + (o.token || '') + '">' + (o.token || '--') + '</td>'
+          + '<td>' + badge + '</td>'
+          + '<td>' + Admin.formatDate(o.created_at) + '</td>'
+          + '<td class="text-right">'
+          + '<button class="btn btn-outline btn-sm" onclick="viewDetail(\'' + o.trade_id + '\')">详情</button> '
+          + (o.status === 1 || o.status === 5 ? '<button class="btn btn-success btn-sm" onclick="confirmOrder(\'' + o.trade_id + '\')">补单</button> ' : '')
+          + '<button class="btn btn-danger btn-sm" onclick="deleteOrder(\'' + o.trade_id + '\')">删除</button>'
+          + '</td></tr>';
+      }).join('');
+    }
+
+    function renderPagination() {
+      var pages = Math.ceil(total / pageSize);
+      var div = document.getElementById('pagination');
+      if (pages <= 1) { div.innerHTML = ''; return; }
+      var html = '<button ' + (currentPage <= 1 ? 'disabled' : '') + ' onclick="goPage(' + (currentPage - 1) + ')">上一页</button>';
+      for (var i = 1; i <= pages; i++) {
+        if (i === 1 || i === pages || Math.abs(i - currentPage) <= 2) {
+          html += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="goPage(' + i + ')">' + i + '</button>';
+        } else if (Math.abs(i - currentPage) === 3) {
+          html += '<span style="color:#9ca3af;">...</span>';
+        }
+      }
+      html += '<button ' + (currentPage >= pages ? 'disabled' : '') + ' onclick="goPage(' + (currentPage + 1) + ')">下一页</button>';
+      html += '<span style="font-size:13px;color:#6b7280;margin-left:8px;">共 ' + total + ' 条</span>';
+      div.innerHTML = html;
+    }
+
+    function goPage(p) { currentPage = p; loadOrders(); }
+
+    function viewDetail(tradeId) {
+      Admin.request('/api/admin/order/detail', { trade_id: tradeId }).then(function (res) {
+        if (res.status_code !== 200) { Admin.showToast(res.message, 'error'); return; }
+        var o = res.data;
+        var html = '<div class="detail-row"><div class="detail-label">交易ID</div><div class="detail-value" style="font-family:monospace;font-size:12px;">' + o.trade_id + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">商户订单</div><div class="detail-value">' + (o.order_id || '--') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">交易类型</div><div class="detail-value">' + (o.trade_type || '--') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">金额</div><div class="detail-value">' + (o.amount || '0') + ' ' + (o.fiat || 'CNY') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">实付</div><div class="detail-value">' + (o.actual_amount || '--') + ' USDT</div></div>'
+          + '<div class="detail-row"><div class="detail-label">收款地址</div><div class="detail-value" style="font-family:monospace;font-size:12px;">' + (o.token || '--') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">状态</div><div class="detail-value">' + Admin.statusText(o.status) + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">交易哈希</div><div class="detail-value" style="font-family:monospace;font-size:12px;">' + (o.tx_hash || '--') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">回调地址</div><div class="detail-value" style="font-size:12px;">' + (o.notify_url || '--') + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">' + Admin.formatDate(o.created_at) + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">确认时间</div><div class="detail-value">' + Admin.formatDate(o.confirmed_at) + '</div></div>';
+        document.getElementById('detailBody').innerHTML = html;
+        document.getElementById('detailOverlay').classList.add('show');
+      });
+    }
+
+    function confirmOrder(tradeId) {
+      if (!confirm('确认将此订单标记为已支付？')) return;
+      Admin.request('/api/admin/order/confirm', { trade_id: tradeId }).then(function (res) {
+        if (res.status_code === 200) {
+          Admin.showToast('补单成功', 'success');
+          loadOrders();
+        } else {
+          Admin.showToast(res.message || '补单失败', 'error');
+        }
+      });
+    }
+
+    function deleteOrder(tradeId) {
+      if (!confirm('确认删除此订单？删除后不可恢复！')) return;
+      Admin.request('/api/admin/order/delete', { trade_id: tradeId }).then(function (res) {
+        if (res.status_code === 200) {
+          Admin.showToast('删除成功', 'success');
+          loadOrders();
+        } else {
+          Admin.showToast(res.message || '删除失败', 'error');
+        }
+      });
+    }
+
+    // 回车搜索
+    document.getElementById('fKeyword').addEventListener('keydown', function(e) { if (e.key === 'Enter') search(); });
+
+    loadOrders();
+  </script>
+</body>
+</html>
