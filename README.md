@@ -24,6 +24,18 @@ OpenUSDT 是一个全免费方案的加密货币收款网关，采用 AWS Lambda
 - **回调通知**：支持飞书通知（管理员）+ 邮件通知（客户）
 - **全免费**：利用 AWS Lambda、Turso、Cloudflare Pages 免费额度
 
+## 界面预览
+
+| 前台首页 | 收银台 |
+| --- | --- |
+| <img src="screenshots/home.png" width="400"> | <img src="screenshots/checkout.png" width="400"> |
+| 后台登录页 | 仪表盘 |
+| <img src="screenshots/admin-login.png" width="400"> | <img src="screenshots/admin-dashboard.png" width="400"> |
+| 钱包管理 | 订单管理 |
+| <img src="screenshots/admin-wallets.png" width="400"> | <img src="screenshots/admin-orders.png" width="400"> |
+| 基本设置 | |
+| <img src="screenshots/admin-settings.png" width="400"> | |
+
 ## 架构
 
 ```
