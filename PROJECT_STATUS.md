@@ -1,6 +1,6 @@
 # OpenPAYME 支付网关 — 项目现状说明
 
-> 最后更新：2026-07-09 04:30
+> 最后更新：2026-07-09 04:37
 > 负责人：臣哥 + 黄豆（AI助手）
 > **⚠️ 本文档随时更新，切换模型/新会话时先读此文件**
 
@@ -115,6 +115,10 @@
 
   - **2026-07-09 后续（Webhook 方式）**：臣哥提供群自定义机器人 Webhook(`https://open.feishu.cn/open-apis/bot/v2/hook/96f33d00-e6cc-4c62-b2d4-04948b8cfb35`)，改为 **Webhook 优先、自建应用 fallback**（`feishu.js`：配了 `FEISHU_WEBHOOK` 先用 Webhook 发，失败则 fallback 到自建应用）。✅ **2026-07-09 04:30 实测**：臣哥已**取消机器人签名校验**，代码即便仍带旧 sign 字段飞书也不校验 → Webhook 通道成功送达（收到"🧪 Webhook 测试"）。随后已将 Lambda 环境变量中的 `FEISHU_SECRET` 清理（签名已关，无需密钥），现环境变量为 `FEISHU_WEBHOOK` / `FEISHU_APP_ID` / `FEISHU_APP_SECRET`（App 凭证保留作 fallback）。飞书通知正式走 Webhook，无需依赖机器人加群。
 
+10. **订单时间时区显示错误（显示成晚7点）** — 根因：数据库 `created_at` 存 UTC 字符串（如 `2026-07-08 19:16:54`，无时区），前端 `Admin.formatDate` 用 `new Date(str)` 解析，浏览器把这种空格分隔格式当**本地时区** → 凌晨3点(UTC 19:16)显示成晚7点(19:16 北京)。✅ 2026-07-09 修复：`formatDate` 改为明确按 UTC 解析（`str.replace(' ','T')+'Z'`），再由浏览器按用户本地时区显示；`api.js` 计算过期时间戳处也统一按 UTC 解析。已部署前端（验证线上 `admin-common.js` 含 `replace(' ', 'T') + 'Z'`）。
+
+11. **补单/确认后商城无回调记录（致命，影响发货）** — 两个根因：① `callback.js` 的 `sendNotify` 用 `Content-Type: application/json` + `JSON.stringify` 发回调，而 BEpusdt 兼容商城（edgeKey）读 `$_POST` 表单字段 → 收到 JSON body 后参数全空、验签失败、直接丢弃 → 商城无回调记录、不发货。② `handleAdminConfirm` 先 `updateOrderStatus(→2)` 再用**更新前**取的 `order`（status=1）发通知，商城即便收到也视为未支付。✅ 2026-07-09 修复：① `sendNotify` 改 `application/x-www-form-urlencoded` + `URLSearchParams` 表单（本地自测通过：Content-Type 正确、字段齐全带签名，商城可读 `$_POST` 验签发货）；② `handleAdminConfirm` 改用更新后的 `updated`（status=2）发通知。已部署 Lambda。
+
 ### ⚠️ 关键部署坑（2026-07-09 踩到，务必记牢）
 - **本 Pages 项目是 git 关联的**（origin=github.com/constlee0839-ops/OpenPAYME，分支 main）。`wrangler pages deploy public --project-name bepusdt` 对未提交改动会"Uploaded 0 files（按 git 态比对）"——**本地改了不提交，部署不生效**！必须 `git commit` 后再 `wrangler pages deploy`。
 - **GitHub token 已失效**（remote URL 里的 `ghp_...` 返回 Bad credentials），无法 `git push` 触发自动生产部署。当前自定义域名 `pay.u222.eu.org` 由最新一次 `wrangler pages deploy` 的 Production 部署提供服务，因此**部署必须走"git commit + wrangler pages deploy"**，不能靠 push。
@@ -130,7 +134,7 @@
 - **接口模式**：收银台模式（create-order）
 - **App ID**：bepusdt_f2278084fda2ea91c4a25d88
 - **回调地址**：`/api/payments/bepusdt/notify`
-- **回调格式**：POST JSON，必须返回"success"字符串
+- **回调格式**：POST 表单（`application/x-www-form-urlencoded`，字段 trade_id/order_id/amount/actual_amount/token/block_transaction_id/status/signature），必须返回"success"字符串
 
 ---
 
