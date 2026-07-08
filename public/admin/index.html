@@ -141,10 +141,43 @@
     .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: .4; }
 
     /* 移动端适配 */
+    /* 按币种分布 */
+    .bytype-row { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+    .bytype-name { width:110px; font-size:13px; color:#374151; flex-shrink:0; }
+    .bytype-bar { flex:1; height:10px; background:#f3f4f6; border-radius:6px; overflow:hidden; }
+    .bytype-bar i { display:block; height:100%; background:linear-gradient(90deg,#3b82f6,#8b5cf6); border-radius:6px; }
+    .bytype-val { width:40px; text-align:right; font-size:13px; font-weight:700; color:#0d0d0d; }
+
+    /* 7天趋势图 */
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+    .chart { display:flex; align-items:flex-end; gap:10px; height:180px; padding-top:10px; }
+    .chart-col { flex:1; display:flex; flex-direction:column; align-items:center; height:100%; }
+    .chart-bars { flex:1; display:flex; align-items:flex-end; gap:5px; width:100%; justify-content:center; }
+    .chart-bar { width:15px; border-radius:4px 4px 0 0; min-height:3px; }
+    .chart-bar.total { background:#cbd5e1; }
+    .chart-bar.paid { background:#10b981; }
+    .chart-x { font-size:11px; color:#9ca3af; margin-top:6px; }
+    .chart-legend { display:flex; gap:18px; font-size:12px; color:#6b7280; margin-top:10px; }
+    .chart-legend .lg { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+    .chart-legend .lg.total { background:#cbd5e1; }
+    .chart-legend .lg.paid { background:#10b981; }
+
+    /* 汇率监控 */
+    .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .card-head h3 { font-size:15px; font-weight:700; }
+    .rate-row { display:flex; align-items:baseline; justify-content:space-between; padding:13px 0; border-bottom:1px solid #f3f4f6; }
+    .rate-row:last-child { border-bottom:none; }
+    .rate-name { font-size:13px; color:#6b7280; font-weight:600; }
+    .rate-val { font-size:24px; font-weight:800; color:#0d0d0d; letter-spacing:-.5px; }
+    .rate-val small { font-size:13px; color:#9ca3af; font-weight:600; margin-left:4px; }
+    .rate-meta { margin-top:10px; font-size:12px; color:#9ca3af; line-height:1.6; }
+    .rate-meta b { color:#10b981; font-weight:600; }
+
     @media (max-width: 768px) {
       .sidebar { display: none; }
       .main { margin-left: 0; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -209,10 +242,47 @@
           <div class="stat-label">失败/过期</div>
           <div class="stat-value" id="statFailed">--</div>
         </div>
+        <div class="stat-card" style="border-color:#8b5cf6">
+          <div class="stat-label">确认中</div>
+          <div class="stat-value" id="statConfirm">--</div>
+          <div class="stat-sub">链上确认中</div>
+        </div>
       </div>
       <div class="card">
         <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">最近7天趋势</h3>
-        <div id="trendChart" style="min-height:200px;color:#9ca3af;text-align:center;padding:40px;">加载中...</div>
+        <div id="trendChart" style="min-height:180px;color:#9ca3af;text-align:center;padding:30px 0;">加载中...</div>
+      </div>
+
+      <div class="grid-2">
+        <!-- 按币种分布 -->
+        <div class="card">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">成功收款 · 按币种</h3>
+          <div id="byTypeBox"><div style="color:#9ca3af;text-align:center;padding:20px 0;">加载中...</div></div>
+        </div>
+
+        <!-- 汇率监控 -->
+        <div class="card">
+          <div class="card-head">
+            <h3>汇率监控</h3>
+            <button class="btn btn-outline btn-sm" id="btnRefreshRate" onclick="refreshRate()">刷新汇率</button>
+          </div>
+          <div class="rate-row">
+            <span class="rate-name">USDT / CNY</span>
+            <span class="rate-val" id="rateUsdt">--<small>¥</small></span>
+          </div>
+          <div class="rate-row">
+            <span class="rate-name">USDC / CNY</span>
+            <span class="rate-val" id="rateUsdc">--<small>¥</small></span>
+          </div>
+          <div class="rate-row">
+            <span class="rate-name">TRX / CNY</span>
+            <span class="rate-val" id="rateTrx">--<small>¥</small></span>
+          </div>
+          <div class="rate-meta">
+            更新于 <span id="rateTime">--</span> · <span id="rateRel">--</span><br>
+            来源 <b id="rateSrc">--</b> · 每 4 小时自动更新
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -258,30 +328,108 @@
     window.openModal = openModal;
     window.closeModal = closeModal;
 
-    // 加载统计
-    function loadDashboard() {
-      Admin.request('/api/admin/dashboard', {}).then(function (res) {
+    // 币种中文名映射
+    var TRADE_NAMES = {
+      'usdt.bep20': 'BSC-USDT', 'usdc.polygon': 'Polygon-USDC', 'usdt.trc20': 'TRON-USDT',
+      'tron.trx': 'TRON-TRX', 'usdc.erc20': 'ETH-USDC', 'usdt.erc20': 'ETH-USDT',
+      'usdt.arb': 'Arbitrum-USDT'
+    };
+    function fmt4(v) { return (parseFloat(v || 0)).toFixed(4); }
+    function fmtAmt(v) { return (parseFloat(v || 0)).toFixed(2); }
+    function fmtBjTime(ts) {
+      if (!ts) return '未知';
+      var d = new Date(Number(ts));
+      var bj = new Date(d.getTime() + 8 * 3600 * 1000);
+      var p = function (n) { return (n < 10 ? '0' : '') + n; };
+      return bj.getUTCFullYear() + '-' + p(bj.getUTCMonth() + 1) + '-' + p(bj.getUTCDate()) + ' ' + p(bj.getUTCHours()) + ':' + p(bj.getUTCMinutes());
+    }
+    function relTime(ts) {
+      if (!ts) return '';
+      var m = Math.floor((Date.now() - Number(ts)) / 60000);
+      if (m < 1) return '刚刚';
+      if (m < 60) return m + ' 分钟前';
+      var h = Math.floor(m / 60);
+      if (h < 24) return h + ' 小时前';
+      return Math.floor(h / 24) + ' 天前';
+    }
+
+    // 渲染：成功收款按币种分布（横向条）
+    function renderByType(byType) {
+      var box = document.getElementById('byTypeBox');
+      if (!byType || !byType.length) { box.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:20px 0;">暂无成功收款</div>'; return; }
+      var max = Math.max.apply(null, byType.map(function (t) { return t.count; }));
+      if (!max) max = 1;
+      var html = '';
+      byType.forEach(function (t) {
+        var name = TRADE_NAMES[t.trade_type] || t.trade_type;
+        var pct = Math.round(t.count / max * 100);
+        html += '<div class="bytype-row"><span class="bytype-name">' + name + '</span>' +
+          '<span class="bytype-bar"><i style="width:' + pct + '%"></i></span>' +
+          '<span class="bytype-val">' + t.count + '</span></div>';
+      });
+      box.innerHTML = html;
+    }
+
+    // 渲染：最近7天趋势（柱状图，总订单 vs 已支付）
+    function renderTrend(trend) {
+      var box = document.getElementById('trendChart');
+      if (!trend || !trend.length) { box.innerHTML = '<div style="color:#9ca3af;text-align:center;padding:30px 0;">暂无数据</div>'; return; }
+      var max = Math.max.apply(null, trend.map(function (t) { return t.total || 0; }));
+      if (!max) max = 1;
+      var html = '<div class="chart">';
+      trend.forEach(function (t) {
+        var dt = (t.date || '').slice(5); // MM-DD
+        var total = t.total || 0, paid = t.paid || 0;
+        var hT = Math.max(3, Math.round(total / max * 100));
+        var hP = Math.max(0, Math.round(paid / max * 100));
+        html += '<div class="chart-col"><div class="chart-bars">' +
+          '<div class="chart-bar total" style="height:' + hT + '%" title="总订单 ' + total + '"></div>' +
+          '<div class="chart-bar paid" style="height:' + hP + '%" title="已支付 ' + paid + '"></div>' +
+          '</div><div class="chart-x">' + dt + '</div></div>';
+      });
+      html += '</div><div class="chart-legend"><span><i class="lg total"></i>总订单</span><span><i class="lg paid"></i>已支付</span></div>';
+      box.innerHTML = html;
+    }
+
+    // 渲染：汇率监控
+    function renderRate(rate) {
+      if (!rate) return;
+      document.getElementById('rateUsdt').innerHTML = fmt4(rate.usdt_cny) + '<small>¥</small>';
+      document.getElementById('rateUsdc').innerHTML = fmt4(rate.usdc_cny) + '<small>¥</small>';
+      document.getElementById('rateTrx').innerHTML = fmt4(rate.trx_cny) + '<small>¥</small>';
+      document.getElementById('rateTime').textContent = fmtBjTime(rate.updatedAt);
+      document.getElementById('rateRel').textContent = relTime(rate.updatedAt);
+      var srcMap = { live: '实时行情', db: '数据库', cache: '缓存', default: '默认值' };
+      document.getElementById('rateSrc').textContent = srcMap[rate.source] || rate.source || '—';
+    }
+
+    // 加载统计 + 汇率
+    function loadDashboard(forceRefresh) {
+      var body = forceRefresh ? { refresh_rate: true } : {};
+      Admin.request('/api/admin/dashboard', body).then(function (res) {
         if (res.status_code !== 200) return;
         var d = res.data;
         document.getElementById('statTotal').textContent = d.totalOrders || 0;
         document.getElementById('statToday').textContent = '今日 ' + (d.todayOrders || 0);
         document.getElementById('statSuccess').textContent = d.successOrders || 0;
-        document.getElementById('statAmount').textContent = '收款 ' + (parseFloat(d.successAmount || 0)).toFixed(2) + ' USDT';
+        document.getElementById('statAmount').textContent = '收款 ' + fmtAmt(d.successAmount) + ' USDT';
         document.getElementById('statPending').textContent = d.pendingOrders || 0;
         document.getElementById('statFailed').textContent = (d.failedOrders || 0) + (d.expiredOrders || 0);
+        document.getElementById('statConfirm').textContent = d.confirmingOrders || 0;
 
-        // 趋势图（简单文本版）
-        if (d.trend && d.trend.length) {
-          var html = '<table style="width:100%"><thead><tr><th>日期</th><th>总订单</th><th>已支付</th><th>收款(USDT)</th></tr></thead><tbody>';
-          d.trend.forEach(function (t) {
-            html += '<tr><td>' + t.date + '</td><td>' + t.total + '</td><td>' + (t.paid || 0) + '</td><td>' + (parseFloat(t.amount || 0)).toFixed(2) + '</td></tr>';
-          });
-          html += '</tbody></table>';
-          document.getElementById('trendChart').innerHTML = html;
-        } else {
-          document.getElementById('trendChart').innerHTML = '暂无数据';
-        }
+        renderByType(d.byType);
+        renderTrend(d.trend);
+        renderRate(d.rate);
       });
+    }
+
+    // 手动刷新汇率
+    function refreshRate() {
+      var btn = document.getElementById('btnRefreshRate');
+      btn.disabled = true; btn.textContent = '刷新中...';
+      loadDashboard(true);
+      setTimeout(function () { btn.disabled = false; btn.textContent = '刷新汇率'; }, 1200);
+      if (window.Admin && Admin.showToast) Admin.showToast('汇率已刷新', 'success');
     }
 
     loadDashboard();

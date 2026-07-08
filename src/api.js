@@ -878,6 +878,43 @@ async function handleAdminConfirm(body, headers) {
 }
 
 /**
+ * 汇率监控：服务端每 4 小时才重新拉取一次并缓存到 DB（config.rate_monitor），
+ * 保证"每隔三四个小时更新一次"。force=true 时忽略缓存强制刷新。
+ * 返回 { usdt_cny, usdc_cny, trx_cny, source, updatedAt, cached }
+ */
+async function getMonitoredRate(force) {
+  const STALE_MS = 4 * 60 * 60 * 1000; // 4 小时
+  let cached = null;
+  try {
+    const raw = await db.getConfig("rate_monitor");
+    if (raw) cached = JSON.parse(raw);
+  } catch (e) { /* 解析失败忽略，走重新拉取 */ }
+
+  const now = Date.now();
+  if (!force && cached && cached.updatedAt && now - cached.updatedAt < STALE_MS) {
+    return Object.assign({}, cached, { cached: true });
+  }
+
+  try {
+    const live = await getLiveRate();
+    const crypto = await getCryptoRates();
+    const data = {
+      usdt_cny: parseFloat(live.rate) || 7.2,
+      usdc_cny: crypto.USDC || 7.2,
+      trx_cny: crypto.TRX || 0.86,
+      source: live.source || "live",
+      updatedAt: now,
+    };
+    await db.setConfig("rate_monitor", JSON.stringify(data));
+    return Object.assign({}, data, { cached: false, refreshed: true });
+  } catch (e) {
+    console.warn("汇率拉取失败，使用已有缓存/默认值:", e.message);
+    if (cached) return Object.assign({}, cached, { cached: true, error: e.message });
+    return { usdt_cny: 7.2, usdc_cny: 7.2, trx_cny: 0.86, source: "default", updatedAt: now, error: e.message };
+  }
+}
+
+/**
  * 首页统计 POST /api/admin/dashboard
  */
 async function handleDashboard(body, headers) {
@@ -887,7 +924,8 @@ async function handleDashboard(body, headers) {
   }
 
   const stats = await db.getDashboardStats();
-  return buildResponse(200, { status_code: 200, message: "success", data: stats });
+  const rate = await getMonitoredRate(body && body.refresh_rate);
+  return buildResponse(200, { status_code: 200, message: "success", data: Object.assign({}, stats, { rate }) });
 }
 
 /**
