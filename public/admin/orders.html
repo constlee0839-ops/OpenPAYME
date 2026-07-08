@@ -133,6 +133,7 @@
               <th>实付</th>
               <th>收款地址</th>
               <th>状态</th>
+              <th>回调</th>
               <th>创建时间</th>
               <th class="text-right">操作</th>
             </tr>
@@ -194,6 +195,12 @@
       });
     }
 
+    function notifyBadge(o) {
+      var c = Admin.notifyColor(o), t = Admin.notifyText(o);
+      var extra = (o.notify_count > 0) ? ' (' + o.notify_count + ')' : '';
+      return '<span class="badge" style="background:' + c + '20;color:' + c + ';">' + t + extra + '</span>';
+    }
+
     function renderOrders(orders) {
       var tbody = document.getElementById('orderList');
       var empty = document.getElementById('emptyState');
@@ -216,6 +223,7 @@
           + '<td>' + (o.actual_amount || '--') + ' USDT</td>'
           + '<td class="addr-cell" title="' + (o.token || '') + '">' + (o.token || '--') + '</td>'
           + '<td>' + badge + '</td>'
+          + '<td>' + notifyBadge(o) + '</td>'
           + '<td>' + Admin.formatDate(o.created_at) + '</td>'
           + '<td class="text-right">'
           + '<button class="btn btn-outline btn-sm" onclick="viewDetail(\'' + o.trade_id + '\')">详情</button> '
@@ -255,6 +263,7 @@
           + '<div class="detail-row"><div class="detail-label">实付</div><div class="detail-value">' + (o.actual_amount || '--') + ' USDT</div></div>'
           + '<div class="detail-row"><div class="detail-label">收款地址</div><div class="detail-value" style="font-family:monospace;font-size:12px;">' + (o.token || '--') + '</div></div>'
           + '<div class="detail-row"><div class="detail-label">状态</div><div class="detail-value">' + Admin.statusText(o.status) + '</div></div>'
+          + '<div class="detail-row"><div class="detail-label">回调状态</div><div class="detail-value">' + notifyBadge(o) + (o.notify_url ? ' <span style="color:#9ca3af;font-size:12px;">' + o.notify_url + '</span>' : '') + '</div></div>'
           + '<div class="detail-row"><div class="detail-label">交易哈希</div><div class="detail-value" style="font-family:monospace;font-size:12px;">' + (o.tx_hash || '--') + '</div></div>'
           + '<div class="detail-row"><div class="detail-label">回调地址</div><div class="detail-value" style="font-size:12px;">' + (o.notify_url || '--') + '</div></div>'
           + '<div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">' + Admin.formatDate(o.created_at) + '</div></div>'

@@ -189,6 +189,35 @@
     return map[s] || '#6b7280';
   }
 
+  /**
+   * 回调状态文字
+   * notify_status=1 成功；=0 时：待支付/确认中订单显示"待支付"，已支付/过期订单按 notify_count 区分"通知失败/未通知"
+   */
+  function notifyText(o) {
+    o = o || {};
+    var ns = o.notify_status;
+    var cnt = o.notify_count || 0;
+    var st = o.status;
+    if (ns === 1) return '已通知';
+    if (st === 1 || st === 5) return '待支付';
+    if (cnt > 0) return '通知失败';
+    return '未通知';
+  }
+
+  /**
+   * 回调状态颜色
+   */
+  function notifyColor(o) {
+    o = o || {};
+    var ns = o.notify_status;
+    var cnt = o.notify_count || 0;
+    var st = o.status;
+    if (ns === 1) return '#10b981';            // 绿：已通知
+    if (st === 1 || st === 5) return '#9ca3af'; // 灰：待支付，尚不需通知
+    if (cnt > 0) return '#ef4444';             // 红：通知失败（会重试）
+    return '#f59e0b';                          // 橙：未通知（已支付但回调还没成功）
+  }
+
   // 导出
   window.Admin = {
     API_BASE: API_BASE,
@@ -202,6 +231,8 @@
     formatDate: formatDate,
     statusText: statusText,
     statusColor: statusColor,
+    notifyText: notifyText,
+    notifyColor: notifyColor,
     clearCache: clearCache,
   };
 

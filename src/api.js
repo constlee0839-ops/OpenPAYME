@@ -616,7 +616,8 @@ async function handleManualConfirm(body, apiToken) {
 
   // 用更新后的订单（status=2）发通知，否则商城收到未支付状态不会发货
   try {
-    await sendNotify(updated, apiToken);
+    const ok = await sendNotify(updated, apiToken);
+    await db.updateNotifyStatus(trade_id, ok);
   } catch (e) {
     console.warn("补单回调通知发送失败:", e.message);
   }
@@ -855,7 +856,12 @@ async function handleAdminConfirm(body, headers) {
   const updated = await db.getOrder(trade_id);
   const apiTokenForNotify = await db.getConfig("api_auth_token") || "";
   // 必须用更新后的订单（status=2、token 已填）发通知，不能用更新前的 order（status=1），否则商城收到未支付状态不会发货
-  try { await sendNotify(updated, apiTokenForNotify); } catch (e) { console.warn("回调通知失败:", e.message); }
+  try {
+    const ok = await sendNotify(updated, apiTokenForNotify);
+    await db.updateNotifyStatus(trade_id, ok);
+  } catch (e) {
+    console.warn("回调通知失败:", e.message);
+  }
   // 飞书通知：管理员补单
   try {
     await sendFeishu("📝 管理员补单", [
