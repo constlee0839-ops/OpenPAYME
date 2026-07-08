@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OpenUSDT 收银台</title>
+  <title>OpenPAYME 收银台</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -16,7 +16,7 @@
       background: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
       border-bottom: 1px solid #e8eaed;
     }
-    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; margin-left: 16px; }
     .topbar-logo {
       width: 36px; height: 36px; background: #0d0d0d; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
@@ -85,14 +85,43 @@
     /* 中栏：选择网络和币种 */
     .select-group { margin-bottom: 20px; }
     .select-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
-    .select-box {
-      width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-      background: #fff; font-size: 14px; font-weight: 500; color: #1a1a1a;
-      appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 16px center; cursor: pointer;
-      outline: none; transition: border-color .2s;
+
+    /* 自定义下拉框 */
+    .cs-wrap { position: relative; width: 100%; }
+    .cs-trigger {
+      width: 100%; padding: 14px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
+      background: #fff; cursor: pointer; display: flex; align-items: center; gap: 12px;
+      transition: border-color .2s; user-select: none;
     }
-    .select-box:focus { border-color: #10b981; }
+    .cs-trigger:hover { border-color: #9ca3af; }
+    .cs-wrap.open .cs-trigger { border-color: #10b981; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .cs-trigger .icon { width: 32px; height: 32px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+    .cs-trigger .icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .cs-trigger .info { flex: 1; }
+    .cs-trigger .info .name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+    .cs-trigger .info .sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+    .cs-trigger .arrow { color: #9ca3af; font-size: 12px; transition: transform .2s; }
+    .cs-wrap.open .cs-trigger .arrow { transform: rotate(180deg); }
+
+    .cs-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+      background: #fff; border: 1.5px solid #10b981; border-top: none;
+      border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12); display: none; max-height: 280px; overflow-y: auto;
+    }
+    .cs-wrap.open .cs-dropdown { display: block; }
+    .cs-option {
+      padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px;
+      transition: background .15s; border-bottom: 1px solid #f3f4f6;
+    }
+    .cs-option:last-child { border-bottom: none; }
+    .cs-option:hover { background: #f0fdf4; }
+    .cs-option.selected { background: #ecfdf5; }
+    .cs-option .icon { width: 36px; height: 36px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+    .cs-option .icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .cs-option .info .name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+    .cs-option .info .sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
     .warning-box {
       background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
       padding: 12px 14px; font-size: 13px; color: #92400e; line-height: 1.5;
@@ -141,6 +170,10 @@
     .qr-card img { display: block; width: 200px; height: 200px; border-radius: 8px; }
     .qr-amount { font-size: 28px; font-weight: 800; color: #10b981; margin-top: 12px; }
     .qr-network { font-size: 13px; color: #6b7280; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+    /* 第二步原版 web3icons 图标 */
+    .w3-ic { width: 24px; height: 24px; border-radius: 50%; background: #f3f4f6; vertical-align: middle; margin-right: 6px; }
+    .w3-ic.sm { width: 16px; height: 16px; margin-right: 4px; }
     .copy-amount-btn {
       display: inline-flex; align-items: center; gap: 4px; background: #f3f4f6;
       border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer;
@@ -183,7 +216,10 @@
     }
     .back-btn:hover { border-color: #10b981; color: #10b981; }
 
-    .footer { text-align: center; padding: 16px; font-size: 12px; color: #d1d5db; }
+    .footer { text-align: center; padding: 20px 16px; margin-top: 24px; font-size: 13px; color: #6b7280; border-top: 1px solid #e5e7eb; background: #fafafa; }
+    .footer a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    .footer a:hover { text-decoration: underline; }
+    .footer .copyright-name { font-weight: 700; color: #111827; }
 
     /* 状态弹窗 */
     .overlay {
@@ -235,6 +271,7 @@
       .summary-value { font-size: 24px; }
     }
   </style>
+  <script src="/assets/qrcode.min.js" defer></script>
 </head>
 <body>
   <!-- 顶部导航 -->
@@ -242,7 +279,7 @@
     <div class="topbar-brand">
       <div class="topbar-logo"><svg viewBox="0 0 24 24" fill="white"><path d="M17.06 11.57c.59-.69.94-1.58.94-2.57 0-2.21-1.79-4-4-4H7v14h7.5c2.49 0 4.5-2.01 4.5-4.5 0-1.33-.58-2.52-1.5-3.35l.56-.58zM9 7h4.5c.83 0 1.5.67 1.5 1.5S14.33 10 13.5 10H9V7zm5.5 10H9v-3h5.5c.83 0 1.5.67 1.5 1.5S15.33 17 14.5 17z"/></svg></div>
       <div>
-        <div class="topbar-title">OpenUSDT 收银台</div>
+        <div class="topbar-title">OpenPAYME 收银台</div>
         <div class="topbar-sub">商户支付会话</div>
       </div>
     </div>
@@ -261,7 +298,7 @@
     <div class="loading"><div class="spinner"></div><div style="color:#9ca3af;font-size:14px;">加载中...</div></div>
   </div>
 
-  <div class="footer">Powered by OpenUSDT</div>
+  <div class="footer">Powered by <a href="https://github.com/constlee0839-ops/OpenPAYME/" target="_blank" rel="noopener">OpenPayMe</a></div>
   <div class="toast" id="toast"></div>
 
   <!-- 状态弹窗 -->
@@ -376,12 +413,11 @@
         showExpired();
         return;
       }
-      const hh = Math.floor(diff / 3600000);
-      const mm = Math.floor((diff % 3600000) / 60000);
+      const totalMins = Math.floor(diff / 60000);
       const ss = Math.floor((diff % 60000) / 1000);
       const el = document.getElementById('timerDisplay');
       if (el) {
-        el.textContent = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+        el.textContent = `${String(totalMins).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
         const pct = diff / (totalSeconds * 1000);
         el.className = 'countdown-value' + (pct <= 0.1 ? ' danger' : pct <= 0.3 ? ' warn' : '');
       }
@@ -417,6 +453,14 @@
     }
 
     // ===== 第一步：选择支付方式 =====
+    // 网络图标配置 - 使用更精确的SVG
+    // 图标使用原版 web3icons 彩色 SVG（文件位于 /assets/web3icons/）
+    const NET_ICONS = { bsc: 'bsc', eth: 'ethereum', tron: 'tron', polygon: 'polygon' };
+    // 网络名称
+    const NET_NAMES = { bsc: 'BSC', eth: 'ETHEREUM', tron: 'TRON', polygon: 'POLYGON' };
+    const CUR_ICONS = { USDT: 'USDT', USDC: 'USDC', TRX: 'TRX', ETH: 'ETH' };
+    let _netIdx = 0, _curIdx = 0;
+
     function showSelection(order) {
       const amount = order.amount || '0';
       const fiat = order.fiat || 'CNY';
@@ -429,6 +473,8 @@
         networks[net].push(m);
       });
       const netKeys = Object.keys(networks);
+      window._networks = networks;
+      window._netKeys = netKeys;
 
       document.getElementById('app').innerHTML = `
         <div class="step1-layout">
@@ -449,19 +495,31 @@
             <div class="panel-title"><span class="dot"></span> 选择网络与币种</div>
             <div class="select-group">
               <div class="select-label">网络</div>
-              <select class="select-box" id="netSelect" onchange="onNetworkChange()">
-                ${netKeys.map((k, i) => {
-                  const label = k.toUpperCase();
-                  const count = networks[k].length;
-                  const currencies = [...new Set(networks[k].map(m => m.currency))].join(', ');
-                  return `<option value="${k}" ${i===0?'selected':''}>${label} · 可用${count}种: ${currencies}</option>`;
-                }).join('')}
-              </select>
+              <div class="cs-wrap" id="netWrap">
+                <div class="cs-trigger" onclick="toggleNetDrop()">
+                  <div class="icon" id="netIconBox"></div>
+                  <div class="info">
+                    <div class="name" id="netNameText">--</div>
+                    <div class="sub" id="netSubText">可用币种: --</div>
+                  </div>
+                  <div class="arrow">▼</div>
+                </div>
+                <div class="cs-dropdown" id="netDrop"></div>
+              </div>
             </div>
             <div class="select-group">
               <div class="select-label">币种</div>
-              <select class="select-box" id="curSelect" onchange="onCurrencyChange()">
-              </select>
+              <div class="cs-wrap" id="curWrap">
+                <div class="cs-trigger" onclick="toggleCurDrop()">
+                  <div class="icon" id="curIconBox"></div>
+                  <div class="info">
+                    <div class="name" id="curNameText">--</div>
+                    <div class="sub" id="curSubText">--</div>
+                  </div>
+                  <div class="arrow">▼</div>
+                </div>
+                <div class="cs-dropdown" id="curDrop"></div>
+              </div>
             </div>
             <div class="warning-box">
               ⚠️ 请仔细核对网络和币种<br>
@@ -486,9 +544,15 @@
         </div>
       `;
 
-      // 初始化网络/币种
-      window._networks = networks;
-      onNetworkChange();
+      _netIdx = 0;
+      renderNetDrop();
+      renderCurDrop();
+
+      // 点击外部关闭下拉
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#netWrap')) document.getElementById('netWrap')?.classList.remove('open');
+        if (!e.target.closest('#curWrap')) document.getElementById('curWrap')?.classList.remove('open');
+      });
 
       // 倒计时
       if (order.expired_at) {
@@ -498,35 +562,77 @@
       }
     }
 
-    function onNetworkChange() {
-      const netSelect = document.getElementById('netSelect');
-      if (!netSelect) return;
-      const net = netSelect.value;
-      const curSelect = document.getElementById('curSelect');
-      const items = window._networks[net] || [];
-      curSelect.innerHTML = items.map((m, i) =>
-        `<option value="${i}">${m.currency} · ${m.token_net_name}${m.is_popular ? ' ⭐' : ''}</option>`
-      ).join('');
-      onCurrencyChange();
+    function renderNetDrop() {
+      const netKeys = window._netKeys;
+      const networks = window._networks;
+      // 更新触发器
+      const k = netKeys[_netIdx];
+      const file = NET_ICONS[k] || 'bsc';
+      const name = NET_NAMES[k] || k.toUpperCase();
+      const curs = [...new Set(networks[k].map(m => m.currency))].join(' / ');
+      document.getElementById('netIconBox').innerHTML = `<img src="/assets/web3icons/network/${file}.svg" alt="${name}">`;
+      document.getElementById('netNameText').textContent = name;
+      document.getElementById('netSubText').textContent = '可用币种: ' + curs;
+      // 渲染下拉选项
+      document.getElementById('netDrop').innerHTML = netKeys.map((nk, i) => {
+        const nf = NET_ICONS[nk] || 'bsc';
+        const nn = NET_NAMES[nk] || nk.toUpperCase();
+        const nc = [...new Set(networks[nk].map(m => m.currency))].join(' / ');
+        return `<div class="cs-option${i===_netIdx?' selected':''}" onclick="selectNet(${i})">
+          <div class="icon"><img src="/assets/web3icons/network/${nf}.svg" alt="${nn}"></div>
+          <div class="info"><div class="name">${nn}</div><div class="sub">可用币种: ${nc}</div></div>
+        </div>`;
+      }).join('');
     }
 
-    function onCurrencyChange() {
-      const netSelect = document.getElementById('netSelect');
-      const curSelect = document.getElementById('curSelect');
-      if (!netSelect || !curSelect) return;
-      const net = netSelect.value;
-      const curIdx = parseInt(curSelect.value);
-      const items = window._networks[net] || [];
-      const m = items[curIdx];
-      if (m) {
-        selectedMethod = m;
-        const amountEl = document.getElementById('summaryAmount');
-        const networkEl = document.getElementById('summaryNetwork');
-        const btnEl = document.getElementById('nextBtn');
-        if (amountEl) amountEl.textContent = m.actual_amount + ' ' + m.currency;
-        if (networkEl) networkEl.textContent = m.network.toUpperCase();
-        if (btnEl) btnEl.disabled = false;
+    function renderCurDrop() {
+      const k = window._netKeys[_netIdx];
+      const items = window._networks[k] || [];
+      const netName = NET_NAMES[k] || k.toUpperCase();
+      // 更新触发器
+      if (items.length > 0) {
+        const m = items[_curIdx] || items[0];
+        const cf = CUR_ICONS[m.currency] || 'USDT';
+        document.getElementById('curIconBox').innerHTML = `<img src="/assets/web3icons/token/${cf}.svg" alt="${m.currency}">`;
+        document.getElementById('curNameText').textContent = m.currency;
+        document.getElementById('curSubText').textContent = netName;
       }
+      // 渲染下拉选项
+      document.getElementById('curDrop').innerHTML = items.map((m, i) => {
+        const cf = CUR_ICONS[m.currency] || 'USDT';
+        return `<div class="cs-option${i===_curIdx?' selected':''}" onclick="selectCur(${i})">
+          <div class="icon"><img src="/assets/web3icons/token/${cf}.svg" alt="${m.currency}"></div>
+          <div class="info"><div class="name">${m.currency}</div><div class="sub">${netName}</div></div>
+        </div>`;
+      }).join('');
+      // 更新选中
+      if (items.length > 0 && _curIdx < items.length) {
+        selectedMethod = items[_curIdx];
+        document.getElementById('summaryAmount').textContent = selectedMethod.actual_amount + ' ' + selectedMethod.currency;
+        document.getElementById('summaryNetwork').textContent = selectedMethod.network.toUpperCase();
+        document.getElementById('nextBtn').disabled = false;
+      }
+    }
+
+    function toggleNetDrop() {
+      document.getElementById('netWrap').classList.toggle('open');
+      document.getElementById('curWrap').classList.remove('open');
+    }
+    function toggleCurDrop() {
+      document.getElementById('curWrap').classList.toggle('open');
+      document.getElementById('netWrap').classList.remove('open');
+    }
+    function selectNet(i) {
+      _netIdx = i;
+      _curIdx = 0;
+      document.getElementById('netWrap').classList.remove('open');
+      renderNetDrop();
+      renderCurDrop();
+    }
+    function selectCur(i) {
+      _curIdx = i;
+      document.getElementById('curWrap').classList.remove('open');
+      renderCurDrop();
     }
 
     async function confirmSelection() {
@@ -569,26 +675,33 @@
       const token = order.token || '';
       const currency = order.currency || 'USDT';
       const network = (order.network || 'bsc').toUpperCase();
+      const cf = CUR_ICONS[currency] || 'USDT';
+      const nf = NET_ICONS[(order.network || 'bsc').toLowerCase()] || 'bsc';
 
       document.getElementById('app').innerHTML = `
         <div class="step2-layout">
           <!-- 左栏：二维码 -->
           <div class="panel qr-section">
             <div class="qr-card">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(token)}" alt="QR Code" />
+              <div id="qrcodeBox"></div>
             </div>
             <div style="font-size:13px;color:#6b7280;">支付金额</div>
             <div class="qr-amount">
+              <img class="w3-ic" src="/assets/web3icons/token/${cf}.svg" alt="${currency}">
               ◆ ${actualAmount} ${currency}
               <button class="copy-amount-btn" onclick="copyText('${actualAmount}')">📋</button>
             </div>
-            <div class="qr-network">⬡ ${network}</div>
+            <div class="qr-network"><img class="w3-ic sm" src="/assets/web3icons/network/${nf}.svg" alt="${network}"> ${network}</div>
           </div>
 
           <!-- 右栏：转账信息 -->
           <div class="panel transfer-section">
             <div class="transfer-title">转账信息</div>
             <div class="transfer-heading">扫码或复制地址完成付款</div>
+            <div class="countdown-box">
+              <div class="countdown-label">剩余时间</div>
+              <div class="countdown-value" id="timerDisplay">--:--</div>
+            </div>
             <div>
               <div class="address-label">收款地址</div>
               <div class="address-card">${token}</div>
@@ -603,6 +716,17 @@
           </div>
         </div>
       `;
+
+      // 本地生成二维码（不依赖外部服务，消除 2 秒外部延迟 + 收款地址隐私泄露 + 单点故障）
+      try {
+        var qr = qrcode(0, 'M');
+        qr.addData((token || '').toString());
+        qr.make();
+        document.getElementById('qrcodeBox').innerHTML = qr.createImgTag(6, 10);
+      } catch (e) {
+        // 兜底：极端情况下退回外部服务，保证二维码一定能显示
+        document.getElementById('qrcodeBox').innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(token) + '" alt="QR Code" />';
+      }
 
       // 倒计时
       if (order.expired_at) {
@@ -634,9 +758,22 @@
           <div class="overlay-icon">✅</div>
           <div class="overlay-title">支付成功！</div>
           <div class="overlay-sub">您的付款已确认，交易已完成</div>
-          ${orderData.redirect_url ? `<a href="${orderData.redirect_url}" class="overlay-btn">返回商户平台</a>` : ''}
+          ${orderData.redirect_url ? `<a href="${orderData.redirect_url}" class="overlay-btn">返回商户平台</a><div id="autoRedirectMsg" style="margin-top:12px;font-size:13px;color:#9ca3af;">1 秒后自动返回商户平台...</div>` : ''}
         </div>
       `;
+      // 3秒后自动跳转回商户平台
+      if (orderData && orderData.redirect_url) {
+        var secs = 1;
+        var msgEl = document.getElementById('autoRedirectMsg');
+        var autoTimer = setInterval(function() {
+          secs--;
+          if (msgEl) msgEl.textContent = secs + ' 秒后自动返回商户平台...';
+          if (secs <= 0) {
+            clearInterval(autoTimer);
+            window.location.href = orderData.redirect_url;
+          }
+        }, 1000);
+      }
     }
 
     function showExpired() {

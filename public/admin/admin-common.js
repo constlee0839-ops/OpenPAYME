@@ -1,4 +1,8 @@
 /**
+ * OpenPAYME — 多链 USDT/USDC 支付网关
+ * © 2026 OpenPAYME · 开源地址: https://github.com/constlee0839-ops/OpenPAYME/
+ */
+/**
  * 管理后台公共模块
  * - API 请求封装
  * - 认证管理
@@ -190,6 +194,7 @@
     formatDate: formatDate,
     statusText: statusText,
     statusColor: statusColor,
+    clearCache: clearCache,
   };
 
   // 前端保活：每4分钟ping一次API，防止Lambda冷启动
@@ -198,4 +203,103 @@
       fetch(API_BASE + '/health', { method: 'GET' }).catch(function() {});
     }, 4 * 60 * 1000);
   }
+
+  // ===== 移动端侧边栏抽屉（汉堡菜单）=====
+  // 统一注入到所有后台页面：左上角汉堡按钮 + 遮罩层 + 滑入式抽屉
+  (function initMobileNav() {
+    function injectStyle() {
+      if (document.getElementById('mobileNavStyle')) return;
+      var css = [
+        '.menu-toggle{display:none;}',
+        '.sidebar-overlay{display:none;}',
+        '@media (max-width:768px){',
+        '  .menu-toggle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;background:#0d0d0d;color:#fff;border-radius:8px;font-size:20px;line-height:1;cursor:pointer;margin-right:12px;flex-shrink:0;}',
+        '  .sidebar{position:fixed;top:0;left:0;height:100vh;width:260px;max-width:82vw;transform:translateX(-100%);transition:transform .25s ease;z-index:1000;flex-direction:column;}',
+        '  .sidebar.open{transform:translateX(0);}',
+        '  .sidebar-brand{padding:20px;border-bottom:1px solid rgba(255,255,255,.1);border-right:none;}',
+        '  .sidebar-nav{flex-direction:column;padding:12px 0;overflow-y:auto;}',
+        '  .nav-item{padding:12px 20px;white-space:normal;}',
+        '  .sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1);border-left:none;}',
+        '  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;}',
+        '  .sidebar-overlay.show{display:block;}',
+        '  .main{margin-left:0;padding:16px;}',
+        '  .page-header{flex-wrap:wrap;}',
+        '}'
+      ].join('\n');
+      var s = document.createElement('style');
+      s.id = 'mobileNavStyle';
+      s.textContent = css;
+      document.head.appendChild(s);
+    }
+
+    function init() {
+      injectStyle();
+      if (document.getElementById('menuToggle')) return; // 已注入则跳过
+
+      var toggle = document.createElement('button');
+      toggle.id = 'menuToggle';
+      toggle.className = 'menu-toggle';
+      toggle.type = 'button';
+      toggle.setAttribute('aria-label', '打开菜单');
+      toggle.textContent = '☰'; // ☰
+
+      var header = document.querySelector('.page-header') || document.querySelector('.main');
+      if (header) header.insertBefore(toggle, header.firstChild);
+
+      var overlay = document.createElement('div');
+      overlay.id = 'sidebarOverlay';
+      overlay.className = 'sidebar-overlay';
+      document.body.appendChild(overlay);
+
+      function toggleNav(e) {
+        if (e) e.preventDefault();
+        var sb = document.querySelector('.sidebar');
+        if (sb) sb.classList.toggle('open');
+        overlay.classList.toggle('show');
+      }
+
+      toggle.addEventListener('click', toggleNav);
+      overlay.addEventListener('click', toggleNav);
+
+      // 点击菜单项后自动关闭抽屉
+      document.querySelectorAll('.sidebar-nav .nav-item').forEach(function (link) {
+        link.addEventListener('click', function () {
+          var sb = document.querySelector('.sidebar');
+          if (sb) sb.classList.remove('open');
+          overlay.classList.remove('show');
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+  })();
+
+  // ===== 版权声明页脚（醒目，统一注入所有后台页面）=====
+  (function injectCopyrightFooter() {
+    var REPO = 'https://github.com/constlee0839-ops/OpenPAYME/';
+    function build() {
+      if (document.getElementById('copyrightFooter')) return;
+      var css = [
+        '.page-footer{margin-top:32px;padding:14px 16px;text-align:center;font-size:13px;color:#6b7280;background:#fafafa;border-top:1px solid #e5e7eb;}',
+        '.page-footer a{color:#2563eb;text-decoration:none;font-weight:600;}',
+        '.page-footer a:hover{text-decoration:underline;}',
+        '.page-footer .pf-name{font-weight:700;color:#111827;}'
+      ].join('\n');
+      var style = document.createElement('style');
+      style.textContent = css;
+      document.head.appendChild(style);
+
+      var footer = document.createElement('div');
+      footer.id = 'copyrightFooter';
+      footer.className = 'page-footer';
+      footer.innerHTML = 'Powered by <a href="' + REPO + '" target="_blank" rel="noopener">OpenPayMe</a>';
+
+      // 放到内容区末尾：优先 .main，其次登录卡片，最后兜底 body
+      var container = document.querySelector('.main') || document.querySelector('.login-card') || document.body;
+      container.appendChild(footer);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+    else build();
+  })();
 })();
