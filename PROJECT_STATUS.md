@@ -1,6 +1,6 @@
 # OpenPAYME 支付网关 — 项目现状说明
 
-> 最后更新：2026-07-09 03:30
+> 最后更新：2026-07-09 04:30
 > 负责人：臣哥 + 黄豆（AI助手）
 > **⚠️ 本文档随时更新，切换模型/新会话时先读此文件**
 
@@ -57,7 +57,7 @@
 - ✅ 15个管理后台API（登录/登出/钱包CRUD/订单管理/统计/设置等）
 - ✅ MD5签名验证（BEpusdt兼容）
 - ✅ 回调通知（已修复：手动补单现在正确传递apiToken）
-- ✅ 飞书通知（自建应用 API：收款成功/管理员补单提醒，凭证存 Lambda 环境变量 FEISHU_*）
+- ✅ 飞书通知（**Webhook 群机器人已生效**，臣哥已取消签名校验；自建应用 API 作 fallback。触发：收款成功💰/管理员补单📝。凭证 Lambda 环境变量 FEISHU_WEBHOOK / FEISHU_APP_ID / FEISHU_APP_SECRET）
 
 ### 前端页面
 - ✅ 收银台（两步式：选择支付方式 → 显示二维码，适配手机）
@@ -113,7 +113,7 @@
 
 9. **飞书通知上线（管理员收款提醒）** — 用臣哥提供的飞书**自建应用**凭证（App ID `cli_aac4196d1138dbcb` + App Secret）走应用 API：新增 `src/lib/feishu.js`（`getTenantToken` 缓存 2h + `resolveChatId` 自动发现机器人所在第一个群 + `sendFeishu` 文本消息），凭证存 Lambda 环境变量 `FEISHU_APP_ID`/`FEISHU_APP_SECRET`/`FEISHU_CHAT_ID`（**不写代码/仓库**）。触发点：① 扫描自动确认收款（`scanTransactions.js` 确认后发"💰 收款成功"）；② 管理员补单（`api.js` handleAdminConfirm 补单后发"📝 管理员补单"）。✅ 2026-07-09 部署 Lambda（含环境变量）+ 本地实测：token 获取成功、消息已发出（机器人已在群里，自动发现群生效）。未配置凭证时所有函数静默返回 false，不影响主流程。
 
-  - **2026-07-09 后续（Webhook 方式）**：臣哥又提供群自定义机器人 Webhook(`https://open.feishu.cn/open-apis/bot/v2/hook/96f33d00-e6cc-4c62-b2d4-04948b8cfb35`) + 签名密钥，改为 **Webhook 优先、自建应用 fallback**（`feishu.js`：配了 `FEISHU_WEBHOOK` 先用 Webhook 带 HMAC-SHA256 签名发，失败则 fallback 到自建应用）。⚠️ 当前 Webhook 签名校验返回 `19021`（secret 不对或 Webhook 与签名密钥非同源），已加 fallback 确保飞书通知不中断（走已通的自建应用，实测 fallback 成功）。待臣哥重新复制**正确且同源**的签名密钥后，Webhook 方式即生效。
+  - **2026-07-09 后续（Webhook 方式）**：臣哥提供群自定义机器人 Webhook(`https://open.feishu.cn/open-apis/bot/v2/hook/96f33d00-e6cc-4c62-b2d4-04948b8cfb35`)，改为 **Webhook 优先、自建应用 fallback**（`feishu.js`：配了 `FEISHU_WEBHOOK` 先用 Webhook 发，失败则 fallback 到自建应用）。✅ **2026-07-09 04:30 实测**：臣哥已**取消机器人签名校验**，代码即便仍带旧 sign 字段飞书也不校验 → Webhook 通道成功送达（收到"🧪 Webhook 测试"）。随后已将 Lambda 环境变量中的 `FEISHU_SECRET` 清理（签名已关，无需密钥），现环境变量为 `FEISHU_WEBHOOK` / `FEISHU_APP_ID` / `FEISHU_APP_SECRET`（App 凭证保留作 fallback）。飞书通知正式走 Webhook，无需依赖机器人加群。
 
 ### ⚠️ 关键部署坑（2026-07-09 踩到，务必记牢）
 - **本 Pages 项目是 git 关联的**（origin=github.com/constlee0839-ops/OpenPAYME，分支 main）。`wrangler pages deploy public --project-name bepusdt` 对未提交改动会"Uploaded 0 files（按 git 态比对）"——**本地改了不提交，部署不生效**！必须 `git commit` 后再 `wrangler pages deploy`。
