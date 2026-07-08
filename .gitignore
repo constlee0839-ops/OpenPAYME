@@ -34,3 +34,11 @@ temp/
 
 # Lambda deployment
 .bundled/
+
+# Local scratch / test scripts (may contain secrets: DB token, Feishu webhook, etc.)
+backups/
+*.cjs
+nul
+zipit.py
+probe_db.cjs
+test-feishu2.cjs
