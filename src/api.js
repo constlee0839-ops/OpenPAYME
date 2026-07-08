@@ -611,11 +611,12 @@ async function handleManualConfirm(body, apiToken) {
 
   // 更新订单状态为 2（已支付），记录确认时间，触发回调通知
   await db.updateOrderStatus(trade_id, 2);
+  const updated = await db.getOrder(trade_id);
   console.log(`手动补单成功: trade_id=${trade_id}, order_id=${order.order_id}`);
 
-  // 异步发送回调通知
+  // 用更新后的订单（status=2）发通知，否则商城收到未支付状态不会发货
   try {
-    await sendNotify(order, apiToken);
+    await sendNotify(updated, apiToken);
   } catch (e) {
     console.warn("补单回调通知发送失败:", e.message);
   }

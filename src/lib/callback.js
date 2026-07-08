@@ -34,17 +34,12 @@ async function sendNotify(order, apiToken) {
 
   console.log(`回调通知: ${notifyUrl}, trade_id=${order.trade_id}, status=${order.status}`);
 
-  // 拼表单（application/x-www-form-urlencoded），BEpusdt 兼容商城读 $_POST 表单字段
-  const formBody = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    formBody.append(k, v == null ? "" : String(v));
-  }
-
+  // edgeKey(商城) 的 notify 路由用 c.req.json() 解析请求体，必须发送 JSON
   try {
     const resp = await fetch(notifyUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formBody.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
       signal: AbortSignal.timeout(10000), // 10 秒超时
     });
 
