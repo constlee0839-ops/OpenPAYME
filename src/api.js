@@ -521,8 +521,8 @@ async function handlePayInfo(body) {
   let currency = order.currency || "USDT";
   let network = order.network || "bsc";
 
-  // 计算过期时间戳
-  const createdAt = order.created_at ? new Date(order.created_at).getTime() : Date.now();
+  // 计算过期时间戳。数据库 created_at 是 UTC 字符串，明确按 UTC 解析，避免运行环境时区差异导致过期时间算错
+  const createdAt = order.created_at ? new Date(order.created_at.replace(' ', 'T') + 'Z').getTime() : Date.now();
   const expiredAt = createdAt + (order.timeout || 600) * 1000;
 
   // 构建区块浏览器链接
@@ -853,7 +853,8 @@ async function handleAdminConfirm(body, headers) {
   await db.updateOrderStatus(trade_id, 2);
   const updated = await db.getOrder(trade_id);
   const apiTokenForNotify = await db.getConfig("api_auth_token") || "";
-  try { await sendNotify(order, apiTokenForNotify); } catch (e) { console.warn("回调通知失败:", e.message); }
+  // 必须用更新后的订单（status=2、token 已填）发通知，不能用更新前的 order（status=1），否则商城收到未支付状态不会发货
+  try { await sendNotify(updated, apiTokenForNotify); } catch (e) { console.warn("回调通知失败:", e.message); }
   // 飞书通知：管理员补单
   try {
     await sendFeishu("📝 管理员补单", [

@@ -29,16 +29,22 @@ async function sendNotify(order, apiToken) {
     status: order.status,
   };
 
-  // 生成签名
+  // 生成签名（基于表单字段，与商城验签一致）
   params.signature = sign(params, apiToken);
 
   console.log(`回调通知: ${notifyUrl}, trade_id=${order.trade_id}, status=${order.status}`);
 
+  // 拼表单（application/x-www-form-urlencoded），BEpusdt 兼容商城读 $_POST 表单字段
+  const formBody = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    formBody.append(k, v == null ? "" : String(v));
+  }
+
   try {
     const resp = await fetch(notifyUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formBody.toString(),
       signal: AbortSignal.timeout(10000), // 10 秒超时
     });
 

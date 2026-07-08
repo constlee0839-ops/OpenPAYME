@@ -159,7 +159,15 @@
    */
   function formatDate(str) {
     if (!str) return '--';
-    var d = new Date(str);
+    var d;
+    // 数据库 created_at/updated_at 存的是 UTC（如 2026-07-08 19:16:54，无时区标记）。
+    // 浏览器会把这种"空格分隔"的字符串当成本地时区，导致凭空多 8 小时（凌晨显示成晚7点）。
+    // 明确按 UTC 解析：补 'T' 和 'Z'，再交给浏览器按用户本地时区显示。
+    if (typeof str === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(str)) {
+      d = new Date(str.replace(' ', 'T') + 'Z');
+    } else {
+      d = new Date(str);
+    }
     if (isNaN(d.getTime())) return str;
     var pad = function (n) { return n < 10 ? '0' + n : n; };
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
