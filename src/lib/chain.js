@@ -1,171 +1,253 @@
 /**
- * BSC 链上操作模块
- * 查询 BEP-20 USDT 交易记录
+ * 多链链上操作模块
+ * 支持: BSC / Polygon / Ethereum (EVM, ethers getLogs) + TRON (TronGrid API)
+ *
+ * 统一导出:
+ *   getCurrentBlockNumber(chainType)
+ *   scanChain(chainType, contractAddr, targetAddr, fromBlock, toBlock) -> [{txHash,from,amount,blockNumber,to}]
+ *   getUSDTRate()
+ *   CHAIN_CONFIG
  */
 
 const { ethers } = require("ethers");
 
-// BEP-20 USDT 合约地址 (BSC)
-const USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955";
+// ==================== 各链配置 ====================
+const CHAIN_CONFIG = {
+  bsc: {
+    name: "BSC",
+    rpc: process.env.BSC_RPC || "https://bsc-dataseed.binance.org/",
+    // BEP-20 USDT（BSC 上精度 18）
+    usdt: { contract: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+    trx: null, // BSC 不支持 TRX
+  },
+  polygon: {
+    name: "Polygon",
+    rpc: process.env.POLYGON_RPC || "https://polygon-rpc.com/",
+    // Polygon USDC（精度 6）
+    usdc: { contract: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
+    usdt: { contract: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
+  },
+  ethereum: {
+    name: "Ethereum",
+    rpc: process.env.ETH_RPC || "https://eth.llamarpc.com/",
+    // ERC-20 USDC（精度 6）
+    usdc: { contract: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
+    usdt: { contract: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
+  },
+  tron: {
+    name: "TRON",
+    // TronGrid 公共 API（无需 key，有速率限制）
+    api: process.env.TRON_API || "https://api.trongrid.io",
+    // TRC-20 USDT 合约见下方 TRON_USDT_CONTRACT 常量（精度 6）
+    trx: { decimals: 6 },
+  },
+};
 
-// USDT Transfer 事件签名
-const TRANSFER_TOPIC = ethers.id("Transfer(address,address,address,uint256)");
+// TRON 主网 TRC-20 USDT 合约
+const TRON_USDT_CONTRACT = "TR7NHqjeKQxX5zZHCwMyJtR8GmHj5g3B7B";
+// TRON 区块浏览器 API 的基础
+const TRONGRID_API = process.env.TRON_API || "https://api.trongrid.io";
 
-// USDT 精度：18位（虽然名字叫USDT但在BSC上是18位精度）
-const USDT_DECIMALS = 18;
+// EVM Transfer 事件签名
+const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 
-// 冷启动优化：在 handler 外部初始化 provider
-let provider = null;
-
-function getProvider() {
-  if (!provider) {
-    const rpcUrl = process.env.BSC_RPC || "https://bsc-dataseed.binance.org/";
-    provider = new ethers.JsonRpcProvider(rpcUrl);
+// provider 缓存（按链）
+const providers = {};
+function getProvider(chainType) {
+  if (!providers[chainType]) {
+    const cfg = CHAIN_CONFIG[chainType];
+    if (!cfg || !cfg.rpc) throw new Error(`链 ${chainType} 未配置 RPC`);
+    providers[chainType] = new ethers.JsonRpcProvider(cfg.rpc);
   }
-  return provider;
+  return providers[chainType];
 }
 
 /**
- * 获取当前最新区块号
+ * 根据 trade_type 解析链类型 + 币类型
+ * 例: usdt.bep20 -> {chain:'bsc', coin:'usdt'}, usdc.polygon -> {chain:'polygon', coin:'usdc'},
+ *     tron.trx -> {chain:'tron', coin:'trx'}, usdt.trc20 -> {chain:'tron', coin:'usdt'}
  */
-async function getCurrentBlockNumber() {
-  const p = getProvider();
+function resolveTradeType(tradeType) {
+  const t = (tradeType || "").toLowerCase();
+  if (t.includes("bep20") || t.includes("bsc")) return { chain: "bsc", coin: t.startsWith("usdc") ? "usdc" : "usdt" };
+  if (t.includes("polygon")) return { chain: "polygon", coin: t.startsWith("usdc") ? "usdc" : "usdt" };
+  if (t.includes("erc20") || t.includes("ethereum") || t.includes("eth")) return { chain: "ethereum", coin: t.startsWith("usdc") ? "usdc" : "usdt" };
+  if (t.includes("trc20") || t.includes("trx") || t.includes("tron")) return { chain: "tron", coin: t.includes("trx") ? "trx" : "usdt" };
+  return { chain: "bsc", coin: "usdt" };
+}
+
+/**
+ * 取某链的合约地址 + 精度
+ */
+function getTokenMeta(chainType, coin) {
+  const cfg = CHAIN_CONFIG[chainType];
+  if (!cfg) return null;
+  const meta = cfg[coin];
+  if (!meta) return null;
+  if (chainType === "tron" && coin === "usdt") {
+    return { contract: TRON_USDT_CONTRACT, decimals: 6 };
+  }
+  return meta;
+}
+
+// ==================== EVM 扫描 ====================
+
+async function getCurrentBlockNumber(chainType = "bsc") {
+  if (chainType === "tron") {
+    // TRON 用 /wallet/getnowblock 取 block 高度
+    const r = await fetch(`${TRONGRID_API}/wallet/getnowblock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const j = await r.json();
+    return j.block_header?.raw_data?.number || 0;
+  }
+  const p = getProvider(chainType);
   return await p.getBlockNumber();
 }
 
 /**
- * 扫描指定区块范围内的 USDT 转入交易
- *
- * @param {string} targetAddress - 目标钱包地址（小写）
- * @param {number} fromBlock - 起始区块
- * @param {number} toBlock - 结束区块
- * @returns {Array<{txHash, from, amount, blockNumber}>}
+ * EVM 链扫描 Transfer 事件（按合约）
  */
-async function scanUSDTTransfers(targetAddress, fromBlock, toBlock) {
-  const p = getProvider();
-  const targetAddr = targetAddress.toLowerCase();
-
-  console.log(
-    `扫描 USDT 转入: 地址=${targetAddr}, 区块 ${fromBlock} -> ${toBlock}`
-  );
-
-  try {
-    // 使用 eth_getLogs 查询 Transfer 事件
-    const logs = await p.getLogs({
-      address: USDT_CONTRACT,
-      topics: [
-        TRANSFER_TOPIC,
-        null, // 任意 from
-        ethers.zeroPadValue(targetAddr, 32), // to = 目标地址
-      ],
-      fromBlock,
-      toBlock,
+async function scanEvmTransfers(chainType, contractAddr, decimals, targetAddr, fromBlock, toBlock) {
+  const p = getProvider(chainType);
+  const target = targetAddr.toLowerCase();
+  const logs = await p.getLogs({
+    address: contractAddr,
+    topics: [TRANSFER_TOPIC, null, ethers.zeroPadValue(target, 32)],
+    fromBlock,
+    toBlock,
+  });
+  const transfers = [];
+  for (const log of logs) {
+    const parsed = ethers.AbiCoder.defaultAbiCoder().decode(["address", "uint256"], log.data);
+    transfers.push({
+      from: ethers.getAddress(log.topics[1]).toLowerCase(),
+      to: target,
+      amount: parseFloat(ethers.formatUnits(parsed[1], decimals)),
+      txHash: log.transactionHash,
+      blockNumber: log.blockNumber,
     });
-
-    console.log(`找到 ${logs.length} 条 Transfer 事件`);
-
-    // 解析日志
-    const transfers = [];
-    for (const log of logs) {
-      // Transfer 事件: indexed address from, indexed address to, uint256 value
-      const parsed = ethers.AbiCoder.defaultAbiCoder().decode(
-        ["address", "uint256"],
-        log.data
-      );
-      // log.topics[1] = from (indexed), log.topics[2] = to (indexed)
-      const from = ethers.getAddress(log.topics[1]).toLowerCase();
-      const amount = parseFloat(ethers.formatUnits(parsed[1], USDT_DECIMALS));
-
-      transfers.push({
-        from,
-        to: targetAddr,
-        amount,
-        txHash: log.transactionHash,
-        blockNumber: log.blockNumber,
-      });
-
-      console.log(
-        `  转入: ${amount} USDT, tx: ${log.transactionHash}, 区块: ${log.blockNumber}`
-      );
-    }
-
-    return transfers;
-  } catch (err) {
-    console.error("扫描 USDT 转账失败:", err.message);
-
-    // 如果区块范围太大，自动缩小
-    if (err.message.includes("query returned more than") || 
-        err.message.includes("Log response size exceeded")) {
-      console.warn("区块范围过大，请减小扫描范围");
-    }
-    throw err;
   }
+  return transfers;
 }
 
 /**
- * 智能扫描：处理大量区块
- * 自动分批，每批最多 2000 个区块
+ * TRON 扫描：TRC-20 USDT 转入
  */
-async function scanUSDTTransfersBatch(targetAddress, fromBlock, toBlock) {
-  const MAX_BLOCK_RANGE = 2000;
-  const allTransfers = [];
+async function scanTronUsdtTransfers(targetAddr, fromBlock, toBlock) {
+  // TronGrid 查询 TRX 交易 / TRC20 转账事件
+  // 这里用 TRC20 合约事件接口
+  const url = `${TRONGRID_API}/v1/contracts/${TRON_USDT_CONTRACT}/triggersmartcontract`;
+  // 实际上 TronGrid 提供 /v1/accounts/{addr}/transactions/trc20 列出 TRC20 转账
+  const listUrl = `${TRONGRID_API}/v1/accounts/${targetAddr}/transactions/trc20?limit=50&contract_address=${TRON_USDT_CONTRACT}`;
+  const r = await fetch(listUrl, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error(`TronGrid 请求失败: ${r.status}`);
+  const j = await r.json();
+  const transfers = [];
+  for (const tx of j.data || []) {
+    // tx 结构: { transaction_id, token_info:{symbol,address,decimals,value}, from, to, block_timestamp, block_number }
+    if ((tx.to || "").toLowerCase() !== targetAddr.toLowerCase()) continue;
+    const decimals = parseInt(tx.token_info?.decimals || "6");
+    const amount = parseInt(tx.token_info?.value || "0") / Math.pow(10, decimals);
+    transfers.push({
+      from: (tx.from || "").toLowerCase(),
+      to: targetAddr.toLowerCase(),
+      amount,
+      txHash: tx.transaction_id,
+      blockNumber: tx.block_number || 0,
+    });
+  }
+  return transfers;
+}
 
-  let currentFrom = fromBlock;
-  while (currentFrom <= toBlock) {
-    const currentTo = Math.min(currentFrom + MAX_BLOCK_RANGE - 1, toBlock);
+/**
+ * TRON 扫描：TRX（原生）转入
+ */
+async function scanTronTrxTransfers(targetAddr, fromBlock, toBlock) {
+  const listUrl = `${TRONGRID_API}/v1/accounts/${targetAddr}/transactions?limit=50&only_confirmed=true`;
+  const r = await fetch(listUrl, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error(`TronGrid TRX 请求失败: ${r.status}`);
+  const j = await r.json();
+  const transfers = [];
+  for (const tx of j.data || []) {
+    const toAddr = tx.to;
+    if ((toAddr || "").toLowerCase() !== targetAddr.toLowerCase()) continue;
+    const amount = (parseInt(tx.raw_data?.contract?.[0]?.parameter?.value?.amount || "0")) / 1e6;
+    transfers.push({
+      from: (tx.from || "").toLowerCase(),
+      to: targetAddr.toLowerCase(),
+      amount,
+      txHash: tx.txID,
+      blockNumber: tx.blockNumber || 0,
+    });
+  }
+  return transfers;
+}
 
+/**
+ * 统一扫描入口
+ * @param {string} chainType bsc/polygon/ethereum/tron
+ * @param {string} coin usdt/usdc/trx/null（null 时根据 chainType 默认）
+ * @param {string} targetAddr 目标地址
+ * @param {number} fromBlock
+ * @param {number} toBlock
+ */
+async function scanChain(chainType, coin, targetAddr, fromBlock, toBlock) {
+  if (chainType === "tron") {
+    if (coin === "trx") return await scanTronTrxTransfers(targetAddr, fromBlock, toBlock);
+    return await scanTronUsdtTransfers(targetAddr, fromBlock, toBlock);
+  }
+  const meta = getTokenMeta(chainType, coin || "usdt");
+  if (!meta) throw new Error(`链 ${chainType} 不支持币种 ${coin}`);
+  return await scanEvmTransfers(chainType, meta.contract, meta.decimals, targetAddr, fromBlock, toBlock);
+}
+
+/**
+ * 智能分批扫描（EVM 用，避免区块范围过大报错）
+ */
+async function scanChainBatch(chainType, coin, targetAddr, fromBlock, toBlock) {
+  if (chainType === "tron") {
+    return await scanChain(chainType, coin, targetAddr, fromBlock, toBlock);
+  }
+  const MAX = 2000;
+  const all = [];
+  let cur = fromBlock;
+  while (cur <= toBlock) {
+    const end = Math.min(cur + MAX - 1, toBlock);
     try {
-      const transfers = await scanUSDTTransfers(
-        targetAddress,
-        currentFrom,
-        currentTo
-      );
-      allTransfers.push(...transfers);
-    } catch (err) {
-      // 如果单批太大，再减半
-      if (err.message.includes("query returned more than") ||
-          err.message.includes("Log response size exceeded")) {
-        const mid = Math.floor((currentFrom + currentTo) / 2);
-        const t1 = await scanUSDTTransfers(targetAddress, currentFrom, mid);
-        const t2 = await scanUSDTTransfers(targetAddress, mid + 1, currentTo);
-        allTransfers.push(...t1, ...t2);
-      } else {
-        throw err;
-      }
+      const r = await scanChain(chainType, coin, targetAddr, cur, end);
+      all.push(...r);
+    } catch (e) {
+      if (e.message.includes("query returned more than") || e.message.includes("exceeded")) {
+        const mid = Math.floor((cur + end) / 2);
+        const a = await scanChain(chainType, coin, targetAddr, cur, mid);
+        const b = await scanChain(chainType, coin, targetAddr, mid + 1, end);
+        all.push(...a, ...b);
+      } else throw e;
     }
-
-    currentFrom = currentTo + 1;
+    cur = end + 1;
   }
-
-  return allTransfers;
+  return all;
 }
 
 /**
- * 确认交易已有足够的区块确认
- * BSC 出块约 3 秒，建议 12 个确认
+ * 确认交易区块确认数（EVM）
  */
-async function getConfirmations(txHash) {
-  const p = getProvider();
+async function getConfirmations(chainType, txHash) {
+  if (chainType === "tron") return 999; // TRON 即时确认
+  const p = getProvider(chainType);
   const tx = await p.getTransaction(txHash);
   if (!tx || tx.blockNumber == null) return 0;
-
-  const currentBlock = await p.getBlockNumber();
-  return currentBlock - tx.blockNumber + 1;
+  const cur = await p.getBlockNumber();
+  return cur - tx.blockNumber + 1;
 }
 
-/**
- * 获取 USDT 对 CNY 的汇率
- * 使用 CoinGecko 免费 API（无需 key）
- * 备用：Binance API
- *
- * @returns {Object} { usdt_cny: number, usdt_usd: number, source: string }
- */
+// ==================== 汇率 ====================
 async function getUSDTRate() {
-  // 优先用 Binance API（更稳定、更新更快）
   try {
-    const resp = await fetch(
-      "https://api.binance.com/api/v3/ticker/price?symbol=USDTCNY"
-    );
+    const resp = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=USDTCNY");
     if (resp.ok) {
       const data = await resp.json();
       const cny = parseFloat(data.price);
@@ -173,36 +255,32 @@ async function getUSDTRate() {
       return { usdt_cny: cny, usdt_usd: 1.0, source: "binance" };
     }
   } catch (e) {
-    console.warn("Binance 汇率获取失败，尝试 CoinGecko:", e.message);
+    console.warn("Binance 汇率失败:", e.message);
   }
-
-  // 备用：CoinGecko
   try {
-    const resp = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny,usd"
-    );
+    const resp = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny,usd");
     if (resp.ok) {
       const data = await resp.json();
-      const cny = data.tether.cny;
-      const usd = data.tether.usd;
-      console.log(`汇率来源: CoinGecko, USDT/CNY = ${cny}, USDT/USD = ${usd}`);
-      return { usdt_cny: cny, usdt_usd: usd, source: "coingecko" };
+      return { usdt_cny: data.tether.cny, usdt_usd: data.tether.usd, source: "coingecko" };
     }
   } catch (e) {
-    console.warn("CoinGecko 汇率获取失败:", e.message);
+    console.warn("CoinGecko 汇率失败:", e.message);
   }
-
-  // 最终兜底：USDT 基本锚定 1 USD，CNY 按 7.2 估算
-  console.warn("所有汇率源失败，使用兜底汇率 7.2");
   return { usdt_cny: 7.2, usdt_usd: 1.0, source: "fallback" };
 }
 
 module.exports = {
+  CHAIN_CONFIG,
+  resolveTradeType,
+  getTokenMeta,
   getCurrentBlockNumber,
-  scanUSDTTransfers,
-  scanUSDTTransfersBatch,
+  scanChain,
+  scanChainBatch,
+  scanEvmTransfers,
+  scanTronUsdtTransfers,
+  scanTronTrxTransfers,
   getConfirmations,
   getUSDTRate,
-  USDT_CONTRACT,
-  USDT_DECIMALS,
+  // 向后兼容（scan.js 旧调用）
+  scanUSDTTransfersBatch: async (addr, from, to) => scanChainBatch("bsc", "usdt", addr, from, to),
 };

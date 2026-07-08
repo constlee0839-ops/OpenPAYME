@@ -17,7 +17,8 @@
 const db = require("./lib/db");
 const {
   getCurrentBlockNumber,
-  scanUSDTTransfersBatch,
+  scanChainBatch,
+  resolveTradeType,
   getUSDTRate,
 } = require("./lib/chain");
 const { sendNotify } = require("./lib/callback");
@@ -70,11 +71,14 @@ exports.handler = async (event) => {
       addressMap.get(addr).push(order);
     }
 
-    // 逐个地址扫描
+    // 逐个地址扫描（按订单的链类型分发到对应扫描器）
     let matchedCount = 0;
     for (const [address, orders] of addressMap) {
+      // 该地址所有订单的 trade_type 通常同链，取第一个推断链
+      const { chain, coin } = resolveTradeType(orders[0].trade_type);
       try {
-        const transfers = await scanUSDTTransfersBatch(address, fromBlock, toBlock);
+        console.log(`扫描链=${chain} 币种=${coin} 地址=${address} 区块 ${fromBlock}->${toBlock}`);
+        const transfers = await scanChainBatch(chain, coin, address, fromBlock, toBlock);
 
         for (const tx of transfers) {
           // 检查是否已处理
@@ -85,12 +89,13 @@ exports.handler = async (event) => {
           }
 
           // 匹配订单
+          let matchedThisTx = false;
           for (const order of orders) {
             if (order.status !== 1) continue; // 只匹配等待支付的
 
             const matched = matchOrder(order, tx);
             if (matched) {
-              console.log(`✅ 匹配成功! trade_id=${order.trade_id}, amount=${tx.amount} USDT`);
+              console.log(`✅ 匹配成功! trade_id=${order.trade_id}, amount=${tx.amount} ${coin.toUpperCase()}`);
 
               // 记录交易
               await db.recordTx({
@@ -102,7 +107,7 @@ exports.handler = async (event) => {
                 trade_id: order.trade_id,
               });
 
-              // 更新订单状态为确认中（5）
+              // 更新订单状态为已支付（2）
               await db.updateOrderStatus(order.trade_id, 2, {
                 tx_hash: tx.txHash,
                 block_number: tx.blockNumber,
@@ -117,12 +122,13 @@ exports.handler = async (event) => {
                 await db.updateNotifyStatus(order.trade_id, success);
               });
 
+              matchedThisTx = true;
               break;
             }
           }
 
           // 如果没匹配到订单，也记录交易（非订单转账检测）
-          if (!orders.some((o) => o.status === 1 && matchOrder(o, tx))) {
+          if (!matchedThisTx) {
             await db.recordTx({
               tx_hash: tx.txHash,
               from_address: tx.from,
@@ -131,11 +137,11 @@ exports.handler = async (event) => {
               block_number: tx.blockNumber,
               trade_id: null,
             });
-            console.log(`📝 非订单转账: ${tx.amount} USDT, tx=${tx.txHash}`);
+            console.log(`📝 非订单转账: ${tx.amount} ${coin.toUpperCase()}, tx=${tx.txHash}`);
           }
         }
       } catch (err) {
-        console.error(`扫描地址 ${address} 失败:`, err.message);
+        console.error(`扫描地址 ${address} (链=${chain}) 失败:`, err.message);
       }
     }
 
