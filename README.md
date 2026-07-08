@@ -5,6 +5,10 @@
 ## 项目简介
 
 OpenUSDT 是一个全免费方案的加密货币收款网关，采用 AWS Lambda + Turso + Cloudflare Pages 架构，零月费运营。
+ AWS Lambda：免费的AWS函数应用
+ Turso：免费的数据库
+ Cloudflare Pages：免费的页面存储。
+ 以后再也不用担心收费了！！
 
 ### 核心特性
 
