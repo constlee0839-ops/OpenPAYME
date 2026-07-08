@@ -140,17 +140,17 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'toast';
-      el.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 24px;border-radius:8px;color:#fff;font-size:14px;z-index:9999;transition:all .3s;opacity:0;transform:translateY(-10px);';
+      el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);padding:12px 24px;border-radius:8px;color:#fff;font-size:14px;z-index:9999;pointer-events:none;transition:all .3s;opacity:0;box-shadow:0 6px 20px rgba(0,0,0,.18);';
       document.body.appendChild(el);
     }
     el.textContent = msg;
     el.style.background = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6';
     el.style.opacity = '1';
-    el.style.transform = 'translateY(0)';
+    el.style.transform = 'translateX(-50%) translateY(0)';
     clearTimeout(el._t);
     el._t = setTimeout(function () {
       el.style.opacity = '0';
-      el.style.transform = 'translateY(-10px)';
+      el.style.transform = 'translateX(-50%) translateY(10px)';
     }, 3000);
   }
 

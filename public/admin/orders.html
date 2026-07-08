@@ -216,7 +216,7 @@
         var sc = Admin.statusColor(o.status);
         var badge = '<span class="badge" style="background:' + sc + '20;color:' + sc + ';">' + Admin.statusText(o.status) + '</span>';
         return '<tr>'
-          + '<td><input type="checkbox" class="row-check" value="' + o.trade_id + '" onchange="onRowCheck()"></td>'
+          + '<td><input type="checkbox" class="row-check" value="' + o.trade_id + '"' + (selectedIds.has(o.trade_id) ? ' checked' : '') + ' onchange="onRowCheck()"></td>'
           + '<td>' + (o.order_id || '--') + '</td>'
           + '<td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:11px;">' + (o.trade_type || '--') + '</code></td>'
           + '<td>' + (o.amount || '0') + ' ' + (o.fiat || 'CNY') + '</td>'
@@ -319,6 +319,7 @@
     function batchDelete() {
       // 直接读取当前 DOM 勾选状态，避免依赖全局状态导致"点了没反应"
       var ids = Array.from(document.querySelectorAll('.row-check:checked')).map(function (cb) { return cb.value; });
+      if (ids.length === 0) ids = Array.from(selectedIds); // 兜底：DOM 未勾选时以 selectedIds 为准
       if (ids.length === 0) return;
       if (!confirm('确认批量删除选中的 ' + ids.length + ' 个订单？删除后不可恢复！')) return;
       var done = 0, failed = 0, total = ids.length;
