@@ -16,6 +16,7 @@
 
 const { verify } = require("./lib/signature");
 const { sendNotify } = require("./lib/callback");
+const { sendFeishu } = require("./lib/feishu");
 const db = require("./lib/db");
 const { getUSDTRate } = require("./lib/chain");
 const crypto = require("crypto");
@@ -850,8 +851,20 @@ async function handleAdminConfirm(body, headers) {
   }
 
   await db.updateOrderStatus(trade_id, 2);
+  const updated = await db.getOrder(trade_id);
   const apiTokenForNotify = await db.getConfig("api_auth_token") || "";
   try { await sendNotify(order, apiTokenForNotify); } catch (e) { console.warn("回调通知失败:", e.message); }
+  // 飞书通知：管理员补单
+  try {
+    await sendFeishu("📝 管理员补单", [
+      "订单号: " + updated.order_id,
+      "交易类型: " + updated.trade_type,
+      "金额: " + updated.actual_amount,
+      "时间: " + new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
+    ]);
+  } catch (e) {
+    console.warn("[feishu] 补单通知失败:", e.message);
+  }
 
   return buildResponse(200, { status_code: 200, message: "补单成功", data: { trade_id, status: 2 } });
 }

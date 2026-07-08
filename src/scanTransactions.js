@@ -11,6 +11,7 @@
 
 const db = require("./lib/db");
 const { sendNotify } = require("./lib/callback");
+const { sendFeishu } = require("./lib/feishu");
 const {
   scanChainBatch,
   resolveTradeType,
@@ -83,6 +84,18 @@ exports.handler = async (event) => {
               await sendNotify(updated, apiToken).then((ok) =>
                 db.updateNotifyStatus(order.trade_id, ok)
               );
+              // 飞书通知：收款成功
+              try {
+                await sendFeishu("💰 收款成功", [
+                  "订单号: " + updated.order_id,
+                  "交易类型: " + updated.trade_type,
+                  "金额: " + updated.actual_amount,
+                  "交易哈希: " + (updated.tx_hash || "-"),
+                  "时间: " + new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }),
+                ]);
+              } catch (e) {
+                console.warn("[feishu] 收款成功通知失败:", e.message);
+              }
               break;
             }
           }

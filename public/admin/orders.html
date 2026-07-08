@@ -168,12 +168,13 @@
     var currentPage = 1, total = 0, pageSize = 15;
     var selectedIds = new Set();
 
-    function search() { currentPage = 1; loadOrders(); }
+    function search() { currentPage = 1; selectedIds.clear(); loadOrders(); }
     function resetFilter() {
       document.getElementById('fKeyword').value = '';
       document.getElementById('fTradeType').value = '';
       document.getElementById('fStatus').value = '';
       currentPage = 1;
+      selectedIds.clear();
       loadOrders();
     }
 
@@ -196,9 +197,11 @@
     function renderOrders(orders) {
       var tbody = document.getElementById('orderList');
       var empty = document.getElementById('emptyState');
-      // 重新渲染时清空选择状态，避免跨页残留
-      selectedIds.clear();
-      var sa = document.getElementById('selectAll'); if (sa) sa.checked = false;
+      // 清理已不在当前列表中的选择（删除/翻页后残留），但保留当前页勾选
+      var renderedIds = new Set(orders.map(function (o) { return o.trade_id; }));
+      selectedIds.forEach(function (id) { if (!renderedIds.has(id)) selectedIds.delete(id); });
+      var sa = document.getElementById('selectAll');
+      if (sa) sa.checked = (orders.length > 0 && orders.every(function (o) { return selectedIds.has(o.trade_id); }));
       updateBatchUI();
       if (!orders.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
@@ -305,16 +308,15 @@
       if (btn) btn.disabled = n === 0;
     }
     function batchDelete() {
-      if (selectedIds.size === 0) return;
-      if (!confirm('确认批量删除选中的 ' + selectedIds.size + ' 个订单？删除后不可恢复！')) return;
-      var ids = Array.from(selectedIds);
-      var done = 0, failed = 0;
-      var btn = document.getElementById('batchDeleteBtn');
-      if (btn) btn.disabled = true;
+      // 直接读取当前 DOM 勾选状态，避免依赖全局状态导致"点了没反应"
+      var ids = Array.from(document.querySelectorAll('.row-check:checked')).map(function (cb) { return cb.value; });
+      if (ids.length === 0) return;
+      if (!confirm('确认批量删除选中的 ' + ids.length + ' 个订单？删除后不可恢复！')) return;
+      var done = 0, failed = 0, total = ids.length;
       ids.forEach(function (tid) {
         Admin.request('/api/admin/order/delete', { trade_id: tid }).then(function (res) {
           if (res.status_code === 200) done++; else failed++;
-          if (done + failed === ids.length) {
+          if (done + failed === total) {
             Admin.showToast('已删除 ' + done + ' 个' + (failed ? '，失败 ' + failed + ' 个' : ''), failed ? 'error' : 'success');
             selectedIds.clear();
             updateBatchUI();
