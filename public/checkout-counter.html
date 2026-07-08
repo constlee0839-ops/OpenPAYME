@@ -455,9 +455,18 @@
     // ===== 第一步：选择支付方式 =====
     // 网络图标配置 - 使用更精确的SVG
     // 图标使用原版 web3icons 彩色 SVG（文件位于 /assets/web3icons/）
-    const NET_ICONS = { bsc: 'bsc', eth: 'ethereum', tron: 'tron', polygon: 'polygon' };
-    // 网络名称
-    const NET_NAMES = { bsc: 'BSC', eth: 'ETHEREUM', tron: 'TRON', polygon: 'POLYGON' };
+    // 网络图标：归一化所有变体（后端 pay/methods 可能返回 bsc/polygon/erc20/trx/trc20 等代币标准名）
+    const NET_ICONS = {
+      bsc: 'bsc',
+      ethereum: 'ethereum', eth: 'ethereum', erc20: 'ethereum',
+      tron: 'tron', trx: 'tron', trc20: 'tron',
+      polygon: 'polygon'
+    };
+    // 网络名称：同样归一化，避免 ERC20/TRX/TRC20 显示异常
+    const NET_NAMES = {
+      bsc: 'BSC', eth: 'ETHEREUM', ethereum: 'ETHEREUM', erc20: 'ERC20',
+      tron: 'TRON', trx: 'TRON', trc20: 'TRON', polygon: 'POLYGON'
+    };
     const CUR_ICONS = { USDT: 'USDT', USDC: 'USDC', TRX: 'TRX', ETH: 'ETH' };
     let _netIdx = 0, _curIdx = 0;
 
@@ -608,7 +617,7 @@
       // 更新选中
       if (items.length > 0 && _curIdx < items.length) {
         selectedMethod = items[_curIdx];
-        document.getElementById('summaryAmount').textContent = selectedMethod.actual_amount + ' ' + selectedMethod.currency;
+        document.getElementById('summaryAmount').textContent = formatCrypto(selectedMethod.actual_amount) + ' ' + selectedMethod.currency;
         document.getElementById('summaryNetwork').textContent = selectedMethod.network.toUpperCase();
         document.getElementById('nextBtn').disabled = false;
       }
@@ -649,12 +658,12 @@
         const data = await resp.json();
         if (data.status_code === 200) {
           // 更新本地订单数据
-          if (data.data) {
-            orderData.actual_amount = data.data.actual_amount;
-            orderData.token = data.data.token;
-            orderData.currency = data.data.currency || selectedMethod.currency;
-            orderData.network = data.data.network || selectedMethod.network;
-          }
+        if (data.data) {
+          orderData.actual_amount = data.data.actual_amount;
+          orderData.token = data.data.token || selectedMethod.wallet_address;
+          orderData.currency = data.data.currency || selectedMethod.currency;
+          orderData.network = data.data.network || selectedMethod.network;
+        }
           setStep(2);
           showPayment(orderData);
         } else {
@@ -688,10 +697,11 @@
             <div style="font-size:13px;color:#6b7280;">支付金额</div>
             <div class="qr-amount">
               <img class="w3-ic" src="/assets/web3icons/token/${cf}.svg" alt="${currency}">
-              ◆ ${actualAmount} ${currency}
+              ◆ ${formatCrypto(actualAmount)} ${currency}
               <button class="copy-amount-btn" onclick="copyText('${actualAmount}')">📋</button>
             </div>
             <div class="qr-network"><img class="w3-ic sm" src="/assets/web3icons/network/${nf}.svg" alt="${network}"> ${network}</div>
+            <button class="copy-address-btn" style="width:auto;margin-top:14px;padding:10px 24px;" onclick="copyAddr()">📋 复制收款地址</button>
           </div>
 
           <!-- 右栏：转账信息 -->
@@ -817,21 +827,48 @@
     }
 
     // ===== 工具 =====
+    // 通用复制函数：先试现代 clipboard API，失败走 execCommand 兜底（手机/微信/iframe 兼容）
+    function copyToClipboard(text, label) {
+      if (!text) { showToast(label + '为空', 'error'); return; }
+      // 优先用现代 API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          () => showToast(label + '已复制', 'success'),
+          () => fallbackCopy(text, label)
+        );
+      } else {
+        fallbackCopy(text, label);
+      }
+    }
+    function fallbackCopy(text, label) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try {
+        document.execCommand('copy');
+        showToast(label + '已复制', 'success');
+      } catch (e) {
+        showToast('复制失败，请长按手动复制', 'error');
+      }
+      document.body.removeChild(ta);
+    }
+
     function copyAddr() {
       const addr = orderData ? orderData.token : '';
-      if (!addr) { showToast('地址为空', 'error'); return; }
-      navigator.clipboard.writeText(addr).then(
-        () => showToast('地址已复制', 'success'),
-        () => showToast('复制失败', 'error')
-      );
+      copyToClipboard(addr, '地址');
     }
 
     function copyText(text) {
-      if (!text) return;
-      navigator.clipboard.writeText(text).then(
-        () => showToast('金额已复制', 'success'),
-        () => showToast('复制失败', 'error')
-      );
+      copyToClipboard(text, '金额');
+    }
+
+    // 加密货币金额格式化：保留最多 6 位小数，去除尾随零（不影响后端存储精度）
+    function formatCrypto(v) {
+      const n = parseFloat(v);
+      if (!isFinite(n)) return (v == null ? '' : String(v));
+      return parseFloat(n.toFixed(6)).toString();
     }
 
     function showToast(msg, type) {

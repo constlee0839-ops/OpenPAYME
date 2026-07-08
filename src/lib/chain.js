@@ -15,21 +15,38 @@ const { ethers } = require("ethers");
 const CHAIN_CONFIG = {
   bsc: {
     name: "BSC",
-    rpc: process.env.BSC_RPC || "https://bsc-dataseed.binance.org/",
+    // 多个公共 RPC 备用（公共节点可能限流/宕机，按顺序尝试）
+    // 实测 bsc-dataseed.binance.org 经常 8s 超时不可达，故主用 publicnode / defibit
+    rpc: process.env.BSC_RPC || "https://bsc.publicnode.com",
+    rpcFallbacks: [
+      "https://bsc-dataseed2.defibit.io",
+      "https://bsc-dataseed1.defibit.io",
+      "https://bsc-dataseed1.ninicoin.io",
+    ],
     // BEP-20 USDT（BSC 上精度 18）
     usdt: { contract: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
     trx: null, // BSC 不支持 TRX
   },
   polygon: {
     name: "Polygon",
-    rpc: process.env.POLYGON_RPC || "https://polygon-rpc.com/",
+    // polygon-rpc.com 已停止公共访问（401），主用 publicnode
+    rpc: process.env.POLYGON_RPC || "https://polygon-bor-rpc.publicnode.com",
+    rpcFallbacks: [
+      "https://polygon-bor.publicnode.com",
+      "https://1rpc.io/matic",
+    ],
     // Polygon USDC（精度 6）
     usdc: { contract: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6 },
     usdt: { contract: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
   },
   ethereum: {
     name: "Ethereum",
-    rpc: process.env.ETH_RPC || "https://eth.llamarpc.com/",
+    // llamarpc 实测 521 宕机，主用 publicnode / 1rpc
+    rpc: process.env.ETH_RPC || "https://ethereum-rpc.publicnode.com",
+    rpcFallbacks: [
+      "https://1rpc.io/eth",
+      "https://cloudflare-eth.com",
+    ],
     // ERC-20 USDC（精度 6）
     usdc: { contract: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
     usdt: { contract: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
@@ -51,15 +68,33 @@ const TRONGRID_API = process.env.TRON_API || "https://api.trongrid.io";
 // EVM Transfer 事件签名
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 
-// provider 缓存（按链）
+// provider 缓存（按链+url）
 const providers = {};
-function getProvider(chainType) {
-  if (!providers[chainType]) {
-    const cfg = CHAIN_CONFIG[chainType];
-    if (!cfg || !cfg.rpc) throw new Error(`链 ${chainType} 未配置 RPC`);
-    providers[chainType] = new ethers.JsonRpcProvider(cfg.rpc);
+
+// 各链 chainId，用于跳过 ethers 的网络自动探测（避免公共 RPC 不可达时 hang）
+const CHAIN_IDS = { bsc: 56, polygon: 137, ethereum: 1 };
+
+function getProvider(chainType, rpcUrl) {
+  const key = `${chainType}:${rpcUrl}`;
+  if (!providers[key]) {
+    const chainId = CHAIN_IDS[chainType];
+    // 用 Network 对象作为 staticNetwork，彻底跳过 ethers 的自动网络探测
+    // （否则公共 RPC 不可达/慢时会在第一次 getLogs 卡死在 "failed to detect network"）
+    const network = ethers.Network.from(chainId);
+    providers[key] = new ethers.JsonRpcProvider(rpcUrl, network, {
+      staticNetwork: network,
+    });
   }
-  return providers[chainType];
+  return providers[key];
+}
+
+// 尝试主 RPC + 备用 RPC，返回第一个可用的 provider（用于扫描）
+function getProviderWithFallback(chainType) {
+  const cfg = CHAIN_CONFIG[chainType];
+  if (!cfg || !cfg.rpc) throw new Error(`链 ${chainType} 未配置 RPC`);
+  const urls = [cfg.rpc, ...(cfg.rpcFallbacks || [])];
+  // 返回主 provider；扫描失败时由调用方切换 fallback
+  return { primary: getProvider(chainType, urls[0]), urls, chainType };
 }
 
 /**
@@ -103,34 +138,68 @@ async function getCurrentBlockNumber(chainType = "bsc") {
     const j = await r.json();
     return j.block_header?.raw_data?.number || 0;
   }
-  const p = getProvider(chainType);
-  return await p.getBlockNumber();
+  const { urls } = getProviderWithFallback(chainType);
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const p = getProvider(chainType, url);
+      return await p.getBlockNumber();
+    } catch (e) {
+      lastErr = e;
+      console.warn(`链 ${chainType} RPC ${url} 取区块高度失败:`, e.message);
+    }
+  }
+  throw lastErr || new Error(`链 ${chainType} 所有 RPC 均不可用`);
 }
 
 /**
- * EVM 链扫描 Transfer 事件（按合约）
+ * EVM 链扫描 Transfer 事件（按合约），带 RPC 备用 + 限流重试
  */
 async function scanEvmTransfers(chainType, contractAddr, decimals, targetAddr, fromBlock, toBlock) {
-  const p = getProvider(chainType);
+  const { urls } = getProviderWithFallback(chainType);
   const target = targetAddr.toLowerCase();
-  const logs = await p.getLogs({
-    address: contractAddr,
-    topics: [TRANSFER_TOPIC, null, ethers.zeroPadValue(target, 32)],
-    fromBlock,
-    toBlock,
-  });
-  const transfers = [];
-  for (const log of logs) {
-    const parsed = ethers.AbiCoder.defaultAbiCoder().decode(["address", "uint256"], log.data);
-    transfers.push({
-      from: ethers.getAddress(log.topics[1]).toLowerCase(),
-      to: target,
-      amount: parseFloat(ethers.formatUnits(parsed[1], decimals)),
-      txHash: log.transactionHash,
-      blockNumber: log.blockNumber,
-    });
+
+  let lastErr;
+  for (const url of urls) {
+    const p = getProvider(chainType, url);
+    // 重试 2 次应对限流
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const logs = await p.getLogs({
+          address: contractAddr,
+          topics: [TRANSFER_TOPIC, null, ethers.zeroPadValue(target, 32)],
+          fromBlock,
+          toBlock,
+        });
+        const transfers = [];
+        for (const log of logs) {
+          const parsed = ethers.AbiCoder.defaultAbiCoder().decode(["address", "uint256"], log.data);
+          transfers.push({
+            from: ethers.getAddress(log.topics[1]).toLowerCase(),
+            to: target,
+            amount: parseFloat(ethers.formatUnits(parsed[1], decimals)),
+            txHash: log.transactionHash,
+            blockNumber: log.blockNumber,
+          });
+        }
+        return transfers;
+      } catch (e) {
+        lastErr = e;
+        const isRateLimit = /rate limit|429|too many requests/i.test(e.message);
+        if (isRateLimit && attempt < 2) {
+          console.warn(`链 ${chainType} RPC ${url} 限流，重试 ${attempt + 1}/2`);
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          continue;
+        }
+        // 非限流错误或重试耗尽 → 尝试下一个备用 RPC
+        break;
+      }
+    }
+    if (!lastErr || !/rate limit|429|too many requests/i.test(lastErr.message)) {
+      // 若不是限流错误，且已拿到（空）结果则上面已 return；到这里说明该 RPC 失败，继续备用
+    }
   }
-  return transfers;
+  throw lastErr || new Error(`链 ${chainType} 所有 RPC 扫描失败`);
 }
 
 /**
@@ -237,35 +306,66 @@ async function scanChainBatch(chainType, coin, targetAddr, fromBlock, toBlock) {
  */
 async function getConfirmations(chainType, txHash) {
   if (chainType === "tron") return 999; // TRON 即时确认
-  const p = getProvider(chainType);
-  const tx = await p.getTransaction(txHash);
-  if (!tx || tx.blockNumber == null) return 0;
-  const cur = await p.getBlockNumber();
-  return cur - tx.blockNumber + 1;
+  const { urls } = getProviderWithFallback(chainType);
+  for (const url of urls) {
+    try {
+      const p = getProvider(chainType, url);
+      const tx = await p.getTransaction(txHash);
+      if (!tx || tx.blockNumber == null) return 0;
+      const cur = await p.getBlockNumber();
+      return cur - tx.blockNumber + 1;
+    } catch (e) {
+      console.warn(`链 ${chainType} RPC ${url} 取确认数失败:`, e.message);
+    }
+  }
+  return 0;
 }
 
 // ==================== 汇率 ====================
+const RATE_SOURCES = [
+  {
+    name: "coingecko",
+    url: "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny,usd",
+    parse: (j) => ({ usdt_cny: j.tether.cny, usdt_usd: j.tether.usd }),
+  },
+  {
+    name: "er-api",
+    url: "https://open.er-api.com/v6/latest/USD",
+    parse: (j) => ({ usdt_cny: parseFloat(j.rates?.CNY), usdt_usd: 1.0 }),
+  },
+];
+
+async function fetchRateOnce(src, timeoutMs) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(src.url, { signal: controller.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const j = await resp.json();
+    const parsed = src.parse(j);
+    if (!parsed.usdt_cny || parsed.usdt_cny <= 0) throw new Error("无效汇率");
+    return { ...parsed, source: src.name };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function getUSDTRate() {
-  try {
-    const resp = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=USDTCNY");
-    if (resp.ok) {
-      const data = await resp.json();
-      const cny = parseFloat(data.price);
-      console.log(`汇率来源: Binance, USDT/CNY = ${cny}`);
-      return { usdt_cny: cny, usdt_usd: 1.0, source: "binance" };
-    }
-  } catch (e) {
-    console.warn("Binance 汇率失败:", e.message);
+  const TIMEOUT = 3000;
+  // 并行请求所有源，取第一个成功的结果（最快路径）
+  const attempts = RATE_SOURCES.map((s) =>
+    fetchRateOnce(s, TIMEOUT).catch((e) => {
+      console.warn(`${s.name} 汇率失败:`, e.message);
+      return null;
+    })
+  );
+  const results = await Promise.all(attempts);
+  const ok = results.find((r) => r && r.usdt_cny > 0);
+  if (ok) {
+    console.log(`汇率来源: ${ok.source}, USDT/CNY = ${ok.usdt_cny}`);
+    return ok;
   }
-  try {
-    const resp = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny,usd");
-    if (resp.ok) {
-      const data = await resp.json();
-      return { usdt_cny: data.tether.cny, usdt_usd: data.tether.usd, source: "coingecko" };
-    }
-  } catch (e) {
-    console.warn("CoinGecko 汇率失败:", e.message);
-  }
+  console.warn("所有汇率源均失败，使用兜底 7.2");
   return { usdt_cny: 7.2, usdt_usd: 1.0, source: "fallback" };
 }
 

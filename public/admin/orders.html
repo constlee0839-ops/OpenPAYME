@@ -76,6 +76,10 @@
   <div class="main">
     <div class="page-header">
       <h1 class="page-title">交易订单</h1>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="selectedCount" style="font-size:13px;color:#6b7280;">已选 0 项</span>
+        <button class="btn btn-danger" id="batchDeleteBtn" onclick="batchDelete()" disabled>批量删除</button>
+      </div>
     </div>
 
     <!-- 筛选 -->
@@ -122,6 +126,7 @@
         <table>
           <thead>
             <tr>
+              <th style="width:36px;"><input type="checkbox" id="selectAll" onclick="toggleAll(this)" title="全选"></th>
               <th>商户订单</th>
               <th>交易类型</th>
               <th>金额</th>
@@ -161,6 +166,7 @@
     });
 
     var currentPage = 1, total = 0, pageSize = 15;
+    var selectedIds = new Set();
 
     function search() { currentPage = 1; loadOrders(); }
     function resetFilter() {
@@ -190,12 +196,17 @@
     function renderOrders(orders) {
       var tbody = document.getElementById('orderList');
       var empty = document.getElementById('emptyState');
+      // 重新渲染时清空选择状态，避免跨页残留
+      selectedIds.clear();
+      var sa = document.getElementById('selectAll'); if (sa) sa.checked = false;
+      updateBatchUI();
       if (!orders.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
       tbody.innerHTML = orders.map(function (o) {
         var sc = Admin.statusColor(o.status);
         var badge = '<span class="badge" style="background:' + sc + '20;color:' + sc + ';">' + Admin.statusText(o.status) + '</span>';
         return '<tr>'
+          + '<td><input type="checkbox" class="row-check" value="' + o.trade_id + '" onchange="onRowCheck()"></td>'
           + '<td>' + (o.order_id || '--') + '</td>'
           + '<td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:11px;">' + (o.trade_type || '--') + '</code></td>'
           + '<td>' + (o.amount || '0') + ' ' + (o.fiat || 'CNY') + '</td>'
@@ -271,6 +282,45 @@
         } else {
           Admin.showToast(res.message || '删除失败', 'error');
         }
+      });
+    }
+
+    // ===== 批量删除 =====
+    function onRowCheck() {
+      selectedIds.clear();
+      document.querySelectorAll('.row-check').forEach(function (cb) {
+        if (cb.checked) selectedIds.add(cb.value);
+      });
+      updateBatchUI();
+    }
+    function toggleAll(src) {
+      document.querySelectorAll('.row-check').forEach(function (cb) { cb.checked = src.checked; });
+      onRowCheck();
+    }
+    function updateBatchUI() {
+      var n = selectedIds.size;
+      var sc = document.getElementById('selectedCount');
+      var btn = document.getElementById('batchDeleteBtn');
+      if (sc) sc.textContent = '已选 ' + n + ' 项';
+      if (btn) btn.disabled = n === 0;
+    }
+    function batchDelete() {
+      if (selectedIds.size === 0) return;
+      if (!confirm('确认批量删除选中的 ' + selectedIds.size + ' 个订单？删除后不可恢复！')) return;
+      var ids = Array.from(selectedIds);
+      var done = 0, failed = 0;
+      var btn = document.getElementById('batchDeleteBtn');
+      if (btn) btn.disabled = true;
+      ids.forEach(function (tid) {
+        Admin.request('/api/admin/order/delete', { trade_id: tid }).then(function (res) {
+          if (res.status_code === 200) done++; else failed++;
+          if (done + failed === ids.length) {
+            Admin.showToast('已删除 ' + done + ' 个' + (failed ? '，失败 ' + failed + ' 个' : ''), failed ? 'error' : 'success');
+            selectedIds.clear();
+            updateBatchUI();
+            loadOrders();
+          }
+        });
       });
     }
 

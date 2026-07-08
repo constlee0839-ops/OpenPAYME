@@ -11,29 +11,13 @@
 
 const db = require("./lib/db");
 const { sendNotify } = require("./lib/callback");
-const chain = require("./lib/chain");
-
-// 各链扫描入口（chain.js 统一导出）
-const SCAN_FNS = {
-  bsc: chain.scanUSDTTransfersBatch,
-  tron: chain.scanUSDTTransfersBatch, // TODO: 接入 TRON 专用扫描器（见 chain.js scanChain）
-  polygon: chain.scanUSDTTransfersBatch,
-  ethereum: chain.scanUSDTTransfersBatch,
-};
+const {
+  scanChainBatch,
+  resolveTradeType,
+  getCurrentBlockNumber,
+} = require("./lib/chain");
 
 const MAX_SCAN_BLOCKS = 2000;
-
-/**
- * 按订单的 trade_type 解析链类型
- */
-function chainTypeOf(tradeType) {
-  const t = (tradeType || "").toLowerCase();
-  if (t.includes("bep20") || t.includes("bsc")) return "bsc";
-  if (t.includes("trc20") || t.includes("trx") || t.includes("tron")) return "tron";
-  if (t.includes("polygon")) return "polygon";
-  if (t.includes("erc20") || t.includes("eth") || t.includes("ethereum")) return "ethereum";
-  return "bsc";
-}
 
 /**
  * 金额匹配（带容差）
@@ -55,7 +39,7 @@ exports.handler = async (event) => {
       return { success: true, message: "无待处理订单", matched: 0 };
     }
 
-    const currentBlock = await chain.getCurrentBlockNumber();
+    const currentBlock = await getCurrentBlockNumber();
     let lastScanned = await db.getLastScannedBlock();
     if (lastScanned === 0) lastScanned = Math.max(1, currentBlock - 1000);
     const fromBlock = lastScanned + 1;
@@ -72,11 +56,10 @@ exports.handler = async (event) => {
 
     let matched = 0;
     for (const [address, orders] of addressMap) {
-      // 取该地址任一订单的链类型（同地址通常同链）
-      const chainType = chainTypeOf(orders[0].trade_type);
-      const scanFn = SCAN_FNS[chainType] || chain.scanUSDTTransfersBatch;
+      // 按订单的 trade_type 解析链 + 币种，分发给对应扫描器（多链支持）
+      const { chain: chainType, coin } = resolveTradeType(orders[0].trade_type);
       try {
-        const transfers = await scanFn(address, fromBlock, toBlock);
+        const transfers = await scanChainBatch(chainType, coin, address, fromBlock, toBlock);
         for (const tx of transfers) {
           if (await db.isTxHashProcessed(tx.txHash)) continue;
           for (const order of orders) {

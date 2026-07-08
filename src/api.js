@@ -92,6 +92,83 @@ async function calculateAmount(fiatAmount, rateStr) {
 }
 
 /**
+ * 获取实时汇率（优先链上/交易所行情，失败回退 DB 配置）
+ * 返回 { rate: string, source: string }
+ */
+async function getLiveRate() {
+  try {
+    const r = await Promise.race([
+      getUSDTRate(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("rate fetch timeout 4s")), 4000)),
+    ]);
+    if (r && r.usdt_cny && r.usdt_cny > 0) {
+      console.log(`汇率使用实时来源: ${r.source}, USDT/CNY=${r.usdt_cny}`);
+      return { rate: String(r.usdt_cny), source: r.source || "live" };
+    }
+  } catch (e) {
+    console.warn("实时汇率获取失败，回退 DB 配置:", e.message);
+  }
+  const cfg = await db.getRate();
+  console.log(`汇率使用 DB 配置: ${cfg.rate || "7.2"}`);
+  return { rate: cfg.rate || "7.2", source: "db" };
+}
+
+/**
+ * 获取各币种对 CNY 汇率（解决 TRX/USDC 等币种误用 USDT 汇率导致应付数量算错的问题）
+ * TRX 单价约 $0.12，若误用 USDT 汇率会让应付数量少算约 8 倍、直接少收钱
+ * 返回 { USDT, USDC, TRX } 各自对 CNY 的汇率
+ */
+// 多币价格内存缓存（TTL 60s）：让 methods 与 update-order 共用同一份最新价，
+// 避免 coingecko 抖动时两接口算出不同金额；且只有 coingecko 从未成功过才回落写死旧值
+let _rateCache = null;
+let _rateCacheTs = 0;
+const RATE_CACHE_TTL = 60 * 1000;
+
+async function getCryptoRates() {
+  const live = await getLiveRate();
+  const usdtCny = parseFloat(live.rate) || 7.2;
+  let trxUsd = 0.12, usdcUsd = 1.0;
+  const now = Date.now();
+  if (_rateCache && now - _rateCacheTs < RATE_CACHE_TTL) {
+    // 命中缓存，使用最近一次成功获取的价格
+    trxUsd = _rateCache.trx_usdt;
+    usdcUsd = _rateCache.usdc_usdt;
+  } else {
+    try {
+      const p = await Promise.race([
+        fetchMultiPrices(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout 4s")), 4000)),
+      ]);
+      if (p && p.usdc_usdt > 0) usdcUsd = p.usdc_usdt;
+      if (p && p.trx_usdt > 0) trxUsd = p.trx_usdt;
+      // 仅当拿到有效值时刷新缓存
+      if (p && p.trx_usdt > 0 && p.usdc_usdt > 0) {
+        _rateCache = { trx_usdt: trxUsd, usdc_usdt: usdcUsd };
+        _rateCacheTs = now;
+      }
+    } catch (e) {
+      console.warn("多币价格获取失败，使用缓存/近似汇率:", e.message);
+    }
+  }
+  return {
+    USDT: usdtCny,
+    USDC: usdtCny * usdcUsd,
+    TRX: usdtCny * trxUsd,
+  };
+}
+
+async function fetchMultiPrices() {
+  const url = "https://api.coingecko.com/api/v3/simple/price?ids=tether,usd-coin,tron&vs_currencies=usd";
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("HTTP " + resp.status);
+  const j = await resp.json();
+  return {
+    usdc_usdt: j["usd-coin"] && j["usd-coin"].usd ? j["usd-coin"].usd : 1.0,
+    trx_usdt: j["tron"] && j["tron"].usd ? j["tron"].usd : 0.12,
+  };
+}
+
+/**
  * 解析汇率浮动语法
  * "7.4" → 固定 7.4
  * "~1.02" → 基础汇率 × 1.02
@@ -135,13 +212,13 @@ async function handleCreateTransaction(body, apiToken) {
     return bepusdtResponse(400, "缺少必填参数: order_id, notify_url, redirect_url");
   }
 
-  // 获取汇率
-  const rateConfig = await db.getRate();
-  let effectiveRate = rateConfig.rate;
+  // 获取汇率（实时优先，回退 DB）
+  const rateInfo = await getLiveRate();
+  let effectiveRate = rateInfo.rate;
 
   // 如果传了 rate 参数，解析浮动语法
   if (rate) {
-    effectiveRate = parseRateSyntax(rateConfig.rate, rate);
+    effectiveRate = parseRateSyntax(rateInfo.rate, rate);
   }
 
   // 计算 USDT 金额
@@ -290,9 +367,9 @@ async function handleMethods(body) {
     return bepusdtResponse(404, "订单不存在");
   }
 
-  // 获取汇率
-  const rateConfig = await db.getRate();
-  const rate = parseFloat(rateConfig.rate);
+  // 获取汇率（实时优先，回退 DB）
+  const rateInfo = await getLiveRate();
+  const rates = await getCryptoRates();
   const fiatAmount = parseFloat(order.amount) || 0;
 
   // 从数据库读取所有启用的钱包
@@ -300,9 +377,20 @@ async function handleMethods(body) {
   const activeWallets = wallets.filter(w => w.status === 1);
 
   // trade_type 格式: currency.network 如 usdt.bep20, USDC.Polygon, tron.trx
+  // 注意: 当 currency 与链名相同时（如 tron.trx），currency 实际是币名 TRX
+  const COIN_BY_TRADETYPE = {
+    "tron.trx": "TRX",
+    "usdt.bep20": "USDT",
+    "usdt.trc20": "USDT",
+    "usdc.erc20": "USDC",
+    "usdc.polygon": "USDC",
+    "usdt.polygon": "USDT",
+    "usdt.erc20": "USDT",
+  };
   const methods = activeWallets.map(w => {
-    const parts = (w.trade_type || "").split(".");
-    const currency = parts[0] || "USDT";
+    const tradeTypeKey = (w.trade_type || "").toLowerCase();
+    const parts = tradeTypeKey.split(".");
+    const currency = COIN_BY_TRADETYPE[tradeTypeKey] || (parts[0] || "USDT").toUpperCase();
     const networkCode = parts[1] || "bep20";
 
     // 映射网络名称
@@ -315,13 +403,14 @@ async function handleMethods(body) {
     };
     const net = networkMap[networkCode.toLowerCase()] || { name: networkCode.toUpperCase(), full: networkCode, popular: false };
 
+    const rate = rates[currency.toUpperCase()] || rates.USDT;
     const actualAmount = fiatAmount > 0 ? (fiatAmount / rate).toFixed(6) : "0";
 
     return {
       amount: order.amount || "0",
       actual_amount: actualAmount,
       fiat: order.fiat || "CNY",
-      exchange_rate: rateConfig.rate,
+      exchange_rate: String(rate),
       currency: currency.toUpperCase(),
       network: net.name.toLowerCase(),
       token_net_name: net.name,
@@ -353,24 +442,37 @@ async function handleUpdateOrder(body) {
     return bepusdtResponse(400, "订单状态不允许更新");
   }
 
-  // 获取钱包 - 从数据库匹配
+  // 获取钱包 - 从数据库匹配（与 handleMethods 同一套 trade_type → currency/network 映射）
   const wallets = await db.getWallets();
-  // 匹配 currency.network 格式，如 USDT.BEP20 或 tron.trx
-  const networkForType = network.toLowerCase();
+  // trade_type 格式: coin.chainStandard 如 usdt.bep20 / usdt.trc20 / tron.trx / usdc.polygon / usdc.erc20
+  const COIN_BY_TRADETYPE = {
+    "tron.trx": "TRX", "usdt.bep20": "USDT", "usdt.trc20": "USDT",
+    "usdc.erc20": "USDC", "usdc.polygon": "USDC", "usdt.polygon": "USDT", "usdt.erc20": "USDT",
+  };
+  // 网络名 ↔ 代币标准 双向归一化（前端回传 bsc/eth/tron/trx/polygon，库里存 bep20/erc20/trc20/trx/polygon）
+  const NET_NORMALIZE = {
+    bsc: "bep20", bep20: "bep20",
+    eth: "erc20", erc20: "erc20",
+    tron: "trc20", trc20: "trc20",
+    trx: "trx",
+    polygon: "polygon",
+  };
+  const reqCurrency = currency.toUpperCase();
+  const reqNetNorm = NET_NORMALIZE[network.toLowerCase()] || network.toLowerCase();
   const matched = wallets.find(w => {
-    const parts = (w.trade_type || "").split(".");
-    const wCurrency = (parts[0] || "").toLowerCase();
-    const wNetwork = (parts[1] || "").toLowerCase();
-    return wCurrency === currency.toLowerCase() &&
-           (wNetwork === networkForType || wNetwork === networkForType.replace("bsc", "bep20").replace("eth", "erc20")) &&
-           w.status === 1;
+    const tt = (w.trade_type || "").toLowerCase();
+    const parts = tt.split(".");
+    const wCurrency = COIN_BY_TRADETYPE[tt] || (parts[0] || "USDT").toUpperCase();
+    const wNetNorm = NET_NORMALIZE[parts[1] || ""] || (parts[1] || "");
+    return wCurrency === reqCurrency && wNetNorm === reqNetNorm && w.status === 1;
   });
   const walletAddress = matched?.wallet_address || "";
-  const tradeType = matched?.trade_type || `${currency.toLowerCase()}.${networkForType}`;
+  const tradeType = matched?.trade_type || `${currency.toLowerCase()}.${network.toLowerCase()}`;
 
-  // 计算金额
-  const rateConfig = await db.getRate();
-  const rate = parseFloat(rateConfig.rate);
+  // 计算金额（按币种汇率，实时优先，回退 DB）
+  const rateInfo = await getLiveRate();
+  const rates = await getCryptoRates();
+  const rate = rates[currency.toUpperCase()] || rates.USDT;
   const fiatAmount = parseFloat(order.amount) || 0;
   const actualAmount = fiatAmount > 0 ? (fiatAmount / rate).toFixed(6) : "0";
 
@@ -391,6 +493,7 @@ async function handleUpdateOrder(body) {
     order_id: order.order_id,
     amount: order.amount,
     actual_amount: actualAmount,
+    token: walletAddress,
     expiration_time: order.timeout,
     status: parseInt(order.status),
     payment_url: paymentUrl,
