@@ -462,16 +462,23 @@
       tron: 'TRON', trx: 'TRON', trc20: 'TRON', polygon: 'POLYGON'
     };
     const CUR_ICONS = { USDT: 'USDT', USDC: 'USDC', TRX: 'TRX', ETH: 'ETH' };
+    // 链映射：将后端 network 值统一归并为链（解决 TRX/TRC20 双 TRON 问题）
+    const CHAIN_MAP = {
+      bsc: 'bsc', bep20: 'bsc',
+      eth: 'ethereum', ethereum: 'ethereum', erc20: 'ethereum',
+      tron: 'tron', trx: 'tron', trc20: 'tron',
+      polygon: 'polygon'
+    };
     let _netIdx = 0, _curIdx = 0;
 
     function showSelection(order) {
       const amount = order.amount || '0';
       const fiat = order.fiat || 'CNY';
 
-      // 按网络分组
+      // 按链分组（用 CHAIN_MAP 合并同链的不同代币标准，例如 trx + trc20 → TRON）
       const networks = {};
       methods.forEach(m => {
-        const net = m.network || 'unknown';
+        const net = CHAIN_MAP[(m.network || '').toLowerCase()] || (m.network || 'unknown').toLowerCase();
         if (!networks[net]) networks[net] = [];
         networks[net].push(m);
       });
@@ -612,7 +619,7 @@
       if (items.length > 0 && _curIdx < items.length) {
         selectedMethod = items[_curIdx];
         document.getElementById('summaryAmount').textContent = formatCrypto(selectedMethod.actual_amount) + ' ' + selectedMethod.currency;
-        document.getElementById('summaryNetwork').textContent = selectedMethod.network.toUpperCase();
+        document.getElementById('summaryNetwork').textContent = (CHAIN_MAP[(selectedMethod.network || '').toLowerCase()] || selectedMethod.network || 'bsc').toUpperCase();
         document.getElementById('nextBtn').disabled = false;
       }
     }
@@ -677,7 +684,7 @@
       const actualAmount = order.actual_amount || '--';
       const token = order.token || '';
       const currency = order.currency || 'USDT';
-      const network = (order.network || 'bsc').toUpperCase();
+      const network = (CHAIN_MAP[(order.network || '').toLowerCase()] || order.network || 'bsc').toUpperCase();
       const cf = CUR_ICONS[currency] || 'USDT';
       const nf = NET_ICONS[(order.network || 'bsc').toLowerCase()] || 'bsc';
 
