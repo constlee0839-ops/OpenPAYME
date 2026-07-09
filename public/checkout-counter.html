@@ -264,6 +264,56 @@
       .order-amount-value { font-size: 20px; }
       .summary-value { font-size: 24px; }
     }
+
+    /* === 美化：卡片式网络选择 + 币种筹码 + 过渡动画 === */
+    .network-cards {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .network-card {
+      background: #fff; border: 2px solid #e5e7eb; border-radius: 12px;
+      padding: 18px 12px 14px; cursor: pointer; transition: all .2s;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      text-align: center; user-select: none;
+    }
+    .network-card:hover { border-color: #0d9488; background: #f0fdfa; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(13,148,136,.12); }
+    .network-card.active { border-color: #0d9488; background: #f0fdfa; box-shadow: inset 0 0 0 1px #0d9488, 0 0 0 3px rgba(13,148,136,.12); }
+    .network-card .icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+    .network-card .icon img { width: 36px; height: 36px; object-fit: contain; display: block; }
+    .network-card .label { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+    .network-card .cur-count { font-size: 11px; color: #9ca3af; margin-top: -2px; }
+
+    .currency-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .currency-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 20px; border: 2px solid #e5e7eb; border-radius: 20px;
+      cursor: pointer; transition: all .2s; font-size: 14px; font-weight: 600;
+      user-select: none; color: #374151; background: #fff;
+    }
+    .currency-chip:hover { border-color: #0d9488; }
+    .currency-chip.active { border-color: #0d9488; background: #0d9488; color: #fff; }
+    .currency-chip .chip-icon { width: 20px; height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .currency-chip .chip-icon img { width: 100%; height: 100%; object-fit: contain; display: block; filter: brightness(0) saturate(100%); }
+    .currency-chip.active .chip-icon img { filter: brightness(0) invert(1); }
+
+    .fade-in { animation: fadeIn .35s ease; }
+    .slide-up { animation: slideUp .35s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+    .qr-card { box-shadow: 0 4px 20px rgba(0,0,0,.08); padding: 32px; }
+    .qr-card img { width: 220px; height: 220px; border-radius: 12px; }
+
+    @media (max-width: 768px) {
+      .network-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    }
+    @media (max-width: 480px) {
+      .network-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .network-card { padding: 14px 8px 12px; }
+      .network-card .icon { width: 32px; height: 32px; }
+      .network-card .icon img { width: 28px; height: 28px; }
+      .currency-chip { padding: 7px 14px; font-size: 13px; }
+    }
   </style>
   <script src="/assets/qrcode.min.js" defer></script>
   <script src="shared/notify.js"></script>
@@ -393,6 +443,11 @@
       const s2 = document.getElementById('step2');
       s1.className = n === 1 ? 'step active' : 'step done';
       s2.className = n === 2 ? 'step active' : n > 2 ? 'step done' : 'step';
+      // 切换步骤时应用动画（延迟一帧确保 DOM 渲染后再触发）
+      setTimeout(function() {
+        var app = document.getElementById('app');
+        if (app) { app.classList.remove('fade-in'); void app.offsetWidth; app.classList.add('fade-in'); }
+      }, 50);
     }
 
     // ===== 倒计时 =====
@@ -506,36 +561,12 @@
           </div>
 
           <!-- 中栏：选择网络和币种 -->
-          <div class="panel">
+          <div class="panel selection-panel">
             <div class="panel-title"><span class="dot"></span> 选择网络与币种</div>
-            <div class="select-group">
-              <div class="select-label">网络</div>
-              <div class="cs-wrap" id="netWrap">
-                <div class="cs-trigger" onclick="toggleNetDrop()">
-                  <div class="icon" id="netIconBox"></div>
-                  <div class="info">
-                    <div class="name" id="netNameText">--</div>
-                    <div class="sub" id="netSubText">可用币种: --</div>
-                  </div>
-                  <div class="arrow">▼</div>
-                </div>
-                <div class="cs-dropdown" id="netDrop"></div>
-              </div>
-            </div>
-            <div class="select-group">
-              <div class="select-label">币种</div>
-              <div class="cs-wrap" id="curWrap">
-                <div class="cs-trigger" onclick="toggleCurDrop()">
-                  <div class="icon" id="curIconBox"></div>
-                  <div class="info">
-                    <div class="name" id="curNameText">--</div>
-                    <div class="sub" id="curSubText">--</div>
-                  </div>
-                  <div class="arrow">▼</div>
-                </div>
-                <div class="cs-dropdown" id="curDrop"></div>
-              </div>
-            </div>
+            <div class="select-label">网络</div>
+            <div class="network-cards" id="netCards"></div>
+            <div class="select-label">币种</div>
+            <div class="currency-chips" id="curChips"></div>
             <div class="warning-box">
               ⚠️ 请仔细核对网络和币种<br>
               转账前请确认钱包中选择的网络和币种与页面完全一致。转错网络或币种可能导致资产永久丢失。
@@ -543,7 +574,7 @@
           </div>
 
           <!-- 右栏：付款摘要 -->
-          <div class="panel" style="display:flex;flex-direction:column;">
+          <div class="panel summary-panel" style="display:flex;flex-direction:column;">
             <div class="summary-amount">
               <div class="summary-label">需支付</div>
               <div class="summary-value" id="summaryAmount">-- USDT</div>
@@ -553,21 +584,16 @@
               <div class="countdown-label">剩余时间</div>
               <div class="countdown-value" id="timerDisplay">--:--</div>
             </div>
-            <button class="next-btn" id="nextBtn" disabled onclick="confirmSelection()">下一步</button>
+            <button class="next-btn" id="nextBtn" disabled onclick="confirmSelection()">确认支付</button>
             <div class="next-hint">下一步将锁定本次支付方式，并显示专属收款地址和二维码。转账金额务必与页面展示金额一致。</div>
           </div>
         </div>
       `;
 
       _netIdx = 0;
-      renderNetDrop();
-      renderCurDrop();
-
-      // 点击外部关闭下拉
-      document.addEventListener('click', function(e) {
-        if (!e.target.closest('#netWrap')) document.getElementById('netWrap')?.classList.remove('open');
-        if (!e.target.closest('#curWrap')) document.getElementById('curWrap')?.classList.remove('open');
-      });
+      renderNetworkCards();
+      renderCurrencyChips();
+      document.getElementById('app').classList.add('fade-in');
 
       // 倒计时
       if (order.expired_at) {
@@ -577,77 +603,50 @@
       }
     }
 
-    function renderNetDrop() {
+    function renderNetworkCards() {
       const netKeys = window._netKeys;
       const networks = window._networks;
-      // 更新触发器
-      const k = netKeys[_netIdx];
-      const file = NET_ICONS[k] || 'bsc';
-      const name = NET_NAMES[k] || k.toUpperCase();
-      const curs = [...new Set(networks[k].map(m => m.currency))].join(' / ');
-      document.getElementById('netIconBox').innerHTML = `<img src="/assets/web3icons/network/${file}.svg" alt="${name}">`;
-      document.getElementById('netNameText').textContent = name;
-      document.getElementById('netSubText').textContent = '可用币种: ' + curs;
-      // 渲染下拉选项
-      document.getElementById('netDrop').innerHTML = netKeys.map((nk, i) => {
+      document.getElementById('netCards').innerHTML = netKeys.map((nk, i) => {
         const nf = NET_ICONS[nk] || 'bsc';
         const nn = NET_NAMES[nk] || nk.toUpperCase();
         const nc = [...new Set(networks[nk].map(m => m.currency))].join(' / ');
-        return `<div class="cs-option${i===_netIdx?' selected':''}" onclick="selectNet(${i})">
+        return `<div class="network-card${i===_netIdx?' active':''}" onclick="onSelectNetwork(${i})">
           <div class="icon"><img src="/assets/web3icons/network/${nf}.svg" alt="${nn}"></div>
-          <div class="info"><div class="name">${nn}</div><div class="sub">可用币种: ${nc}</div></div>
+          <div class="label">${nn}</div>
+          <div class="cur-count">${nc}</div>
         </div>`;
       }).join('');
     }
 
-    function renderCurDrop() {
+    function renderCurrencyChips() {
       const k = window._netKeys[_netIdx];
       const items = window._networks[k] || [];
       const netName = NET_NAMES[k] || k.toUpperCase();
-      // 更新触发器
       if (items.length > 0) {
-        const m = items[_curIdx] || items[0];
-        const cf = CUR_ICONS[m.currency] || 'USDT';
-        document.getElementById('curIconBox').innerHTML = `<img src="/assets/web3icons/token/${cf}.svg" alt="${m.currency}">`;
-        document.getElementById('curNameText').textContent = m.currency;
-        document.getElementById('curSubText').textContent = netName;
-      }
-      // 渲染下拉选项
-      document.getElementById('curDrop').innerHTML = items.map((m, i) => {
-        const cf = CUR_ICONS[m.currency] || 'USDT';
-        return `<div class="cs-option${i===_curIdx?' selected':''}" onclick="selectCur(${i})">
-          <div class="icon"><img src="/assets/web3icons/token/${cf}.svg" alt="${m.currency}"></div>
-          <div class="info"><div class="name">${m.currency}</div><div class="sub">${netName}</div></div>
-        </div>`;
-      }).join('');
-      // 更新选中
-      if (items.length > 0 && _curIdx < items.length) {
-        selectedMethod = items[_curIdx];
+        document.getElementById('curChips').innerHTML = items.map((m, i) => {
+          const cf = CUR_ICONS[m.currency] || 'USDT';
+          return `<div class="currency-chip${i===_curIdx?' active':''}" onclick="onSelectCurrency(${i})">
+            <span class="chip-icon"><img src="/assets/web3icons/token/${cf}.svg" alt="${m.currency}"></span>
+            ${m.currency}
+          </div>`;
+        }).join('');
+        // 更新摘要
+        selectedMethod = items[_curIdx] || items[0];
         document.getElementById('summaryAmount').textContent = formatCrypto(selectedMethod.actual_amount) + ' ' + selectedMethod.currency;
         document.getElementById('summaryNetwork').textContent = (CHAIN_MAP[(selectedMethod.network || '').toLowerCase()] || selectedMethod.network || 'bsc').toUpperCase();
         document.getElementById('nextBtn').disabled = false;
       }
     }
 
-    function toggleNetDrop() {
-      document.getElementById('netWrap').classList.toggle('open');
-      document.getElementById('curWrap').classList.remove('open');
-    }
-    function toggleCurDrop() {
-      document.getElementById('curWrap').classList.toggle('open');
-      document.getElementById('netWrap').classList.remove('open');
-    }
-    function selectNet(i) {
+    function onSelectNetwork(i) {
       _netIdx = i;
       _curIdx = 0;
-      document.getElementById('netWrap').classList.remove('open');
-      renderNetDrop();
-      renderCurDrop();
+      renderNetworkCards();
+      renderCurrencyChips();
     }
-    function selectCur(i) {
+    function onSelectCurrency(i) {
       _curIdx = i;
-      document.getElementById('curWrap').classList.remove('open');
-      renderCurDrop();
+      renderCurrencyChips();
     }
 
     async function confirmSelection() {
@@ -700,14 +699,14 @@
             <div class="qr-card">
               <div id="qrcodeBox"></div>
             </div>
-            <div style="font-size:13px;color:#6b7280;">支付金额</div>
+            <div style="font-size:13px;color:#6b7280;margin-top:4px;">支付金额</div>
             <div class="qr-amount">
               <img class="w3-ic" src="/assets/web3icons/token/${cf}.svg" alt="${currency}">
               ◆ ${formatCrypto(actualAmount)} ${currency}
-              <button class="copy-amount-btn" onclick="copyText('${actualAmount}')">📋</button>
+              <button class="copy-amount-btn" onclick="copyText('${actualAmount}')" title="复制金额">📋</button>
             </div>
             <div class="qr-network"><img class="w3-ic sm" src="/assets/web3icons/network/${nf}.svg" alt="${network}"> ${network}</div>
-            <button class="copy-address-btn" style="width:auto;margin-top:14px;padding:10px 24px;" onclick="copyAddr()">📋 复制收款地址</button>
+            <button class="copy-address-btn" style="width:auto;margin-top:18px;padding:11px 28px;font-size:15px;" onclick="copyAddr()">📋 复制收款地址</button>
           </div>
 
           <!-- 右栏：转账信息 -->
@@ -719,14 +718,13 @@
               <div class="countdown-value" id="timerDisplay">--:--</div>
             </div>
             <div>
-              <div class="address-label">收款地址</div>
+              <div class="address-label">收款地址 <button class="copy-amount-btn" onclick="copyAddr()" style="margin-left:auto;float:right;">📋 复制</button></div>
               <div class="address-card">${token}</div>
             </div>
-            <button class="copy-address-btn" onclick="copyAddr()">复制地址</button>
             <ol class="steps-list">
-              <li><span class="num">01</span> 使用当前页面选择的 ${network} 网络</li>
-              <li><span class="num">02</span> 精确转入 ${actualAmount} ${currency}</li>
-              <li><span class="num">03</span> 转账后保持页面打开，系统会自动确认订单</li>
+              <li><span class="num">01</span> 使用 <strong>${network}</strong> 网络</li>
+              <li><span class="num">02</span> 精确转入 <strong>${formatCrypto(actualAmount)} ${currency}</strong></li>
+              <li><span class="num">03</span> 转账后保持页面打开，系统自动确认</li>
             </ol>
             <button class="back-btn" onclick="goBack()">← 返回上一步</button>
           </div>
