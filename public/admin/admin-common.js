@@ -133,9 +133,11 @@
   }
 
   /**
-   * 显示提示消息
+   * 显示提示消息（统一走 shared/notify.js 的 Notify 组件；加载失败则降级为内联提示）
    */
   function showToast(msg, type) {
+    if (window.Notify) { window.Notify.show(msg, type); return; }
+    // 兜底：notify.js 未加载时的简易实现
     var el = document.getElementById('toast');
     if (!el) {
       el = document.createElement('div');

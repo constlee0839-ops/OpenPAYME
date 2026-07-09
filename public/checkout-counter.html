@@ -13,10 +13,10 @@
 
     /* 顶部导航 */
     .topbar {
-      background: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+      background: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: center; position: relative;
       border-bottom: 1px solid #e8eaed;
     }
-    .topbar-brand { display: flex; align-items: center; gap: 10px; margin-left: 16px; }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; margin: 0 auto; }
     .topbar-logo {
       width: 36px; height: 36px; background: #0d0d0d; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
@@ -28,6 +28,7 @@
       display: inline-flex; align-items: center; gap: 6px;
       background: #f0fdf4; color: #16a34a; padding: 6px 14px;
       border-radius: 20px; font-size: 13px; font-weight: 600;
+      position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
     }
     .status-dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
@@ -244,14 +245,7 @@
     .spinner { width: 40px; height: 40px; border: 3px solid #f0f0f0; border-top-color: #10b981; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .toast {
-      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-80px);
-      background: #0d0d0d; color: #fff; padding: 10px 22px; border-radius: 24px;
-      font-size: 14px; font-weight: 500; z-index: 9999; opacity: 0; transition: all .3s; pointer-events: none;
-    }
-    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    .toast.success { background: #10b981; }
-    .toast.error { background: #ef4444; }
+    /* 提示弹窗样式统一由 shared/notify.js 提供 */
 
     /* 手机适配 */
     @media (max-width: 900px) {
@@ -272,6 +266,7 @@
     }
   </style>
   <script src="/assets/qrcode.min.js" defer></script>
+  <script src="shared/notify.js"></script>
 </head>
 <body>
   <!-- 顶部导航 -->
@@ -299,7 +294,6 @@
   </div>
 
   <div class="footer">Powered by <a href="https://github.com/constlee0839-ops/OpenPAYME/" target="_blank" rel="noopener">OpenPayMe</a></div>
-  <div class="toast" id="toast"></div>
 
   <!-- 状态弹窗 -->
   <div class="overlay" id="overlay">
@@ -869,15 +863,6 @@
       const n = parseFloat(v);
       if (!isFinite(n)) return (v == null ? '' : String(v));
       return parseFloat(n.toFixed(6)).toString();
-    }
-
-    function showToast(msg, type) {
-      const el = document.getElementById('toast');
-      if (!el) return;
-      el.textContent = msg;
-      el.className = 'toast ' + (type || '') + ' show';
-      clearTimeout(el._t);
-      el._t = setTimeout(() => { el.className = 'toast'; }, 3000);
     }
 
     init();
