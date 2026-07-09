@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenPAYME 收银台</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -84,44 +84,7 @@
     .order-amount-value { font-size: 24px; font-weight: 800; color: #10b981; }
 
     /* 中栏：选择网络和币种 */
-    .select-group { margin-bottom: 20px; }
     .select-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
-
-    /* 自定义下拉框 */
-    .cs-wrap { position: relative; width: 100%; }
-    .cs-trigger {
-      width: 100%; padding: 14px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-      background: #fff; cursor: pointer; display: flex; align-items: center; gap: 12px;
-      transition: border-color .2s; user-select: none;
-    }
-    .cs-trigger:hover { border-color: #9ca3af; }
-    .cs-wrap.open .cs-trigger { border-color: #10b981; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-    .cs-trigger .icon { width: 32px; height: 32px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
-    .cs-trigger .icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .cs-trigger .info { flex: 1; }
-    .cs-trigger .info .name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
-    .cs-trigger .info .sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
-    .cs-trigger .arrow { color: #9ca3af; font-size: 12px; transition: transform .2s; }
-    .cs-wrap.open .cs-trigger .arrow { transform: rotate(180deg); }
-
-    .cs-dropdown {
-      position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
-      background: #fff; border: 1.5px solid #10b981; border-top: none;
-      border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.12); display: none; max-height: 280px; overflow-y: auto;
-    }
-    .cs-wrap.open .cs-dropdown { display: block; }
-    .cs-option {
-      padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px;
-      transition: background .15s; border-bottom: 1px solid #f3f4f6;
-    }
-    .cs-option:last-child { border-bottom: none; }
-    .cs-option:hover { background: #f0fdf4; }
-    .cs-option.selected { background: #ecfdf5; }
-    .cs-option .icon { width: 36px; height: 36px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
-    .cs-option .icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .cs-option .info .name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
-    .cs-option .info .sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
 
     .warning-box {
       background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
@@ -166,9 +129,10 @@
     .qr-section { text-align: center; }
     .qr-card {
       background: #fff; border: 1.5px solid #e5e7eb; border-radius: 16px;
-      padding: 24px; display: inline-block; margin-bottom: 16px;
+      padding: 32px; display: inline-block; margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.08);
     }
-    .qr-card img { display: block; width: 200px; height: 200px; border-radius: 8px; }
+    .qr-card img { display: block; width: 220px; height: 220px; border-radius: 12px; }
     .qr-amount { font-size: 28px; font-weight: 800; color: #10b981; margin-top: 12px; }
     .qr-network { font-size: 13px; color: #6b7280; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
@@ -297,12 +261,7 @@
     .currency-chip.active .chip-icon img { filter: brightness(0) invert(1); }
 
     .fade-in { animation: fadeIn .35s ease; }
-    .slide-up { animation: slideUp .35s ease; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-
-    .qr-card { box-shadow: 0 4px 20px rgba(0,0,0,.08); padding: 32px; }
-    .qr-card img { width: 220px; height: 220px; border-radius: 12px; }
 
     @media (max-width: 768px) {
       .network-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -315,13 +274,11 @@
       .currency-chip { padding: 7px 14px; font-size: 13px; }
     }
   </style>
-  <script src="/assets/qrcode.min.js" defer></script>
   <script src="shared/notify.js"></script>
   <link rel="preconnect" href="https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com">
   <link rel="dns-prefetch" href="https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com">
   <link rel="preload" href="/assets/web3icons/token/USDT.svg" as="image">
   <link rel="preload" href="/assets/web3icons/network/bsc.svg" as="image">
-  <link rel="preload" href="/assets/qrcode.min.js" as="script">
 </head>
 <body>
   <!-- 顶部导航 -->
@@ -370,6 +327,20 @@
     const API = 'https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com';
     let pollTimer = null, countdownTimer = null, expiredAt = null, totalSeconds = 0;
     let orderData = null, methods = [], selectedMethod = null;
+
+    // 二维码库按需懒加载（仅第 2 步需要），避免首屏多下载 55KB，打开更快
+    let _qrLoaded = null;
+    function loadQRCode() {
+      if (_qrLoaded) return _qrLoaded;
+      _qrLoaded = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = '/assets/qrcode.min.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      return _qrLoaded;
+    }
 
     // ===== 初始化 =====
     async function init() {
@@ -595,6 +566,9 @@
       renderCurrencyChips();
       document.getElementById('app').classList.add('fade-in');
 
+      // 用户在第一步选网络/币种，趁机后台预载二维码库，进入第 2 步时已基本就绪
+      loadQRCode();
+
       // 倒计时
       if (order.expired_at) {
         expiredAt = new Date(order.expired_at * 1000);
@@ -684,7 +658,7 @@
     }
 
     // ===== 第二步：显示付款信息 =====
-    function showPayment(order) {
+    async function showPayment(order) {
       const actualAmount = order.actual_amount || '--';
       const token = order.token || '';
       const currency = order.currency || 'USDT';
@@ -731,8 +705,9 @@
         </div>
       `;
 
-      // 本地生成二维码（不依赖外部服务，消除 2 秒外部延迟 + 收款地址隐私泄露 + 单点故障）
+      // 确保二维码库已就绪（进入本页时已在后台预载；首次直入第 2 步则此处等待）
       try {
+        await loadQRCode();
         var qr = qrcode(0, 'M');
         qr.addData((token || '').toString());
         qr.make();
