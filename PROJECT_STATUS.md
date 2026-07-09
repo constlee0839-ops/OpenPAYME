@@ -1,6 +1,6 @@
 # OpenPAYME 支付网关 — 项目现状说明
 
-> 最后更新：2026-07-09 04:37
+> 最后更新：2026-07-09 09:42
 > 负责人：臣哥 + 黄豆（AI助手）
 > **⚠️ 本文档随时更新，切换模型/新会话时先读此文件**
 
@@ -40,11 +40,12 @@
 |----|------|-----------|------|------|:----:|
 | 1 | USDT-BEP20 | usdt.bep20 | BSC | 0xe6d587ed...a48483 | ✅ |
 | 2 | TRON-TRX | tron.trx | TRON | TG3qttvkTZ...kscN1y | ✅ |
-| 3 | USDC-Polygon | usdc.polygon | Polygon | 0xe6d587ed...a48483 | ✅ |
+| 3 | USDC-Polygon | usdc.polygon | Polygon | 0x71910494...Da3b | ✅ |
 | 4 | USDT-TRC20 | usdt.trc20 | TRON | TG3qttvkTZ...kscN1y | ✅ |
 | 5 | USDC-ERC20 | usdc.erc20 | Ethereum | 0xe6d587ed...a48483 | ✅ |
+| 10 | USDT-Polygon | usdt.polygon | Polygon | 0x71910494...Da3b | ✅（新增）|
 
-**注意**：TRON网络有2种币（TRX和USDT-TRC20），不是3种。
+**注意**：TRON网络有2种币（TRX和USDT-TRC20）。**此前误报的 asdf 占位钱包脏数据不存在**——6条钱包全部是真实有效地址。之前记忆中的重复行可能是旧 bug 已被系统自动纠正。
 
 ---
 
@@ -54,76 +55,77 @@
 - ✅ 8个BEpusdt兼容接口（create-transaction, create-order, cancel-transaction, pay/methods, pay/update-order, pay/info, pay/notify, order/query）
 - ✅ 健康检查 /health
 - ✅ 手动补单 /api/v1/order/manual-confirm
-- ✅ 15个管理后台API（登录/登出/钱包CRUD/订单管理/统计/设置等）
+- ✅ 15个管理后台API（登录/登出/钱包CRUD/订单管理/统计/汇率监控/设置等）
 - ✅ MD5签名验证（BEpusdt兼容）
-- ✅ 回调通知（已修复：手动补单现在正确传递apiToken）
-- ✅ 飞书通知（**Webhook 群机器人已生效**，臣哥已取消签名校验；自建应用 API 作 fallback。触发：收款成功💰/管理员补单📝。凭证 Lambda 环境变量 FEISHU_WEBHOOK / FEISHU_APP_ID / FEISHU_APP_SECRET）
+- ✅ 回调通知（已修复：表单格式 + 签名 + 状态同步）
+- ✅ 飞书通知（**Webhook 群机器人**，后台可配→config表优先，env fallback。触发：收款成功💰/补单📝）
+- ✅ **汇率监控（4h服务端缓存）**：`getMonitoredRate(force)` — config.rate_monitor(JSON) 缓存，超4小时或 force 才重新拉取 CoinGecko/er-api。dashboard 接口返回 rate.usdt_cny/usdc_cny/trx_cny。支持 `refresh_rate` 强制刷新
+- ✅ **getDashboardStats()**：总数/今日/成功/待付/失败/过期/确认中/按币种(trade_type)分布/近7天趋势
 
 ### 前端页面
-- ✅ 收银台（两步式：选择支付方式 → 显示二维码，适配手机）
-- ✅ 管理后台首页（统计面板）
+- ✅ 收银台（两步式：选择支付方式 → 显示二维码，已美化：卡片式网络选择+币种筹码+过渡动画+QR视觉升级）
+- ✅ 管理后台首页（**增强版**：确认中指标卡+按币种分布横向条+7天CSS柱状图+**汇率监控卡**(USDT/USDC/TRX→CNY)+刷新按钮）
 - ✅ 钱包管理页（增删改查+下拉选择交易类型）
-- ✅ 订单管理页（列表+筛选+详情+补单+删除+**批量删除勾选框**）
-- ✅ 基本设置页（API Token/汇率/密码）
+- ✅ 订单管理页（列表+筛选+详情+补单+删除+批量删除+**导出CSV**+统一通知弹窗）
+- ✅ 基本设置页（API Token/汇率/密码/**飞书Webhook+Secret可视化配置**）
 - ✅ **移动端响应式后台**：改为 ☰ 汉堡抽屉菜单（左上角按钮滑入侧边栏，点遮罩/菜单项关闭），取代原先"移动端隐藏侧边栏导致菜单消失"的设计
-- ✅ **订单批量删除加固**：全局锁 `_batchDeleting` 防重复提交 + `Promise.all` 统一收尾 + 删除期间禁用所有勾选框，修复"第一次成功、第二次点不动"
-- ✅ **钱包新增加固**：`saveWallet` 加 `.finally()` 兜底恢复保存按钮，修复"第一次成功、第二次卡死"
-- ✅ **收银台二维码本地生成**：去掉外部第三方 `api.qrserver.com`（实测 TTFB 2 秒、且把收款地址 token 发给第三方），改用本地 `qrcode.min.js` 库浏览器端生成 data URI 二维码。消除 2 秒外部等待 + 隐私泄露 + 单点故障。保留 qrserver 作极端兜底
+- ✅ **统一通知弹窗**（`src/shared/notify.js`，IIFE）：顶部居中、带✓/✕/ℹ/!图标、可堆叠多条、2.8s自动消失、`pointer-events:none`永不遮挡按钮。5个后台页+收银台统一调用（`Notify.success/error/info/warn`或兼容`showToast`），消除之前两套重复toast
+- ✅ **收银台logo居中**：`.topbar` 改 `justify-content:center`，品牌整体居中，状态徽章绝对定位右上角
+- ✅ **速度优化**：`_headers` 设静态资产1年长缓存(`immutable`)；checkout页 `<head>` preconnect/dns-prefetch API域名 + preload关键图标；admin页动态preconnect
+- ✅ **收银台美化**：下拉框→卡片式网络选择(网格布局+悬停高亮上浮)+币种筹码pill按钮+ fade-in/slide-up过渡动画+QR卡加大阴影+步骤步骤编号绿色底色+文案精简
 
 ### 核心逻辑
-- ✅ 链上扫描（BSC USDT）
-- ✅ 汇率获取（Binance + CoinGecko）
-- ✅ 回调指数退避重试
+- ✅ 链上扫描（BSC USDT/Polygon USDC/Ethereum USDC/TRON TRX+USDT—多链代码已提交部署）
+- ✅ 汇率获取（CoinGecko + er-api，60s内存缓存，method与update-order共用同一份价防错账）
+- ✅ 回调指数退避重试（POST表单格式，兼容BEpusdt/edgeKey `$_POST` 验签）
 - ✅ 过期订单自动关闭
 - ✅ 支付方式从数据库动态读取（不再硬编码）
+- ✅ **订单时间时区正确**：UTC解析 + 浏览器本地时区显示
+- ✅ **补单后商城回调状态同步**：`handleAdminConfirm` 用更新后订单发回调（status=2），商城正常收货发货
 
 ---
 
 ## 六、问题跟踪
 
 ### ✅ 已解决（修复记录）
+
+#### 第一批（2026-07-08）
 1. **手机端后台菜单看不见** — 移动端原 `@media` 把 `.sidebar{display:none}` 且无替代入口，登录后菜单整个消失。改为 ☰ 汉堡抽屉菜单（左上角按钮滑入侧边栏，点遮罩/菜单项关闭）。✅ 2026-07-08 部署
 2. **订单批量删除第二次失效** — 原手动计数器 + 按钮状态残留导致"第一次成、第二次点不动"。重写为全局锁 `_batchDeleting` + `Promise.all` 统一收尾 + 删除期间禁用所有勾选框。✅ 2026-07-08 部署（曾因 wrangler 本地缓存导致改了没生效，已清 `.wrangler/tmp` 重传）
 3. **钱包管理新增第二次卡死** — `saveWallet` 加 `.finally()` 兜底，无论成功/失败/异常都恢复保存按钮可点。✅ 加固部署
 4. **管理后台慢 / 旧代码不更新** — 根因是桌面浏览器缓存了旧版 admin 资源（连带旧 bug 的 orders.html），并非后端慢（后端订单列表仅 2 条 SQL、连接复用）。已加 `<link rel="preconnect">` 到 API + 4 分钟 /health 保活 ping + 清缓存强制重传。✅ 2026-07-08。注：到 ap-east-1(香港) 的网络延迟 + Lambda 冷启动属免费方案固有限制，桌面端硬刷新后正常
 5. **回调签名bug** — 手动补单现在正确传递 apiToken。✅ 已修复
-6. **收银台跳过选择步骤** — create-order 模式现在先显示"选择支付方式"(Step1)，再显示二维码(Step2)。收银台前端 `checkout-counter.html` 已实现 `reselect` 逻辑：`orderData.reselect` 为真则展示选择页。✅ 2026-07-08 前端部署已上线（curl 验证：reselect 逻辑 + Step1/Step2 双步骤结构均在线上）
-7. **收银台 Step2 倒计时** — Step2(扫码/复制转账)现已带"剩余时间"倒计时盒，并在渲染后调用 `startCountdown()`。✅ 2026-07-08 已上线
-8. **收银台倒计时格式** — 由 HH:MM:SS 改为 MM:SS（`updateCountdown` 用 `totalMins:ss`）。✅ 2026-07-08 已上线
 
-### 🔴 待修复（严重）
-1. ~~**多链扫描缺失**~~ → ✅ **已部署（2026-07-09）**：代码提交(52cdb59)后，本次 Lambda 重新打包上传（deploy-api.zip）已含 `src/lib/chain.js` 多链扫描器 + `src/scanTransactions.js`，`aws lambda update-function-code` 已上线 bepusdt-api 与 scan-busdt-block。
+#### 第二批（2026-07-09 凌晨 ~ 04:30）
+6. **收银台跳过选择步骤** — create-order 模式现在先显示"选择支付方式"(Step1)，再显示二维码(Step2)。收银台前端 `checkout-counter.html` 已实现 `reselect` 逻辑：`orderData.reselect` 为真则展示选择页。✅ 2026-07-08 前端部署
+7. **收银台 Step2 倒计时** — Step2(扫码/复制转账)现已带"剩余时间"倒计时盒，并在渲染后调用 `startCountdown()`。✅ 部署上线
+8. **收银台倒计时格式** — 由 HH:MM:SS 改为 MM:SS（`updateCountdown` 用 `totalMins:ss`）。✅ 部署上线
+9. **多链扫描缺失** — 代码提交 + Lambda 打包上传（src/lib/chain.js 多链扫描器），已上线 bepusdt-api 与 scan-busdt-block。✅ 2026-07-09
+10. **pay/methods 字段修复** — network 大写映射 + token_net_name + currency/network 字段正确。✅ 2026-07-09 部署
+11. **scanTransactions.js 崩溃炸弹（隐藏严重 bug）** — 引用不存在的 confirmOrder + 旧 schema。已重写复用现 schema + sendNotify。✅ 部署
+12. **update-order 返回 token 为空** — 钱包匹配写反：currency→trade_type 反向比对永远对不上。修复：复用 COIN_BY_TRADETYPE + NET_NORMALIZE。✅ 已部署 Lambda
+13. **多币汇率一致性 + 防错账** — 加 60s 内存缓存，methods 与 update-order 共用同一份价。✅ 已部署
+14. **后台订单批量删除"丢失"** — 未提交 git 的 wrangler 直传改动被覆盖。重新实现并提交 git。✅ 已部署
+15. **批量删除"选择状态不同步"** — renderOrders 重渲染清勾选。修复：读 DOM `.row-check:checked` 替代全局状态。✅ 已部署
+16. **飞书通知上线** — Webhook 群机器人（臣哥已取消签名校验）→ 自建应用 fallback。✅ 2026-07-09
+17. **订单时间时区显示错误** — UTC 存为字符串→浏览器当本地时区。修复：`formatDate` 明确按 UTC 解析。✅ 已部署
+18. **补单后商城无回调记录** — 两个根因：① callback JSON body 商城读 `$_POST` 空；② handleAdminConfirm 用更新前 status=1 订单发回调。修复：sendNotify 用表单格式 + 改用更新后订单。✅ 已部署 Lambda
 
-### 🟡 待修复（中等）
-2. ~~**pay/methods 的 currency/network 字段修复尚未上线**~~ → ✅ **已部署（2026-07-09）**：`src/api.js`(handleMethods) 的 network 大写映射 + token_net_name + currency/network 字段已随本次 Lambda 部署上线（curl 实测：USDT→BSC、TRX→TRON、USDC→Polygon，字段正确）。
-
-### 🟢 待修复（轻微）
-3. ~~**git 仓库未提交**~~ → 已全部提交。备份 tag `backup-2026-07-08` 已 push 到 GitHub（含前端+文档+DB导出）。多链代码提交 52cdb59。Turso 数据库已导出到 backups/2026-07-08/（schema.sql/data.json/restore-data.sql）。
-
-### 🔧 本次（2026-07-09 凌晨）新增修复
-4. **scanTransactions.js 崩溃炸弹（隐藏严重 bug）** — 旧版引用 db.js 中**不存在**的 `confirmOrder` 等导出，且字段用旧 schema(`orderId/walletAddress/expectedAmount/status==="PENDING"`)，而 createOrder.js:81、queryOrder.js:41 都 `require("./scanTransactions")` 并在下单/查单时触发。Lambda 冷启动 `require('./lib/db')` 一旦加载即抛错 → 拖垮整个 bepusdt-api。**已重写为正确实现**（复用现 DB schema：status=1、actual_amount、trade_type + sendNotify 回调），消除崩溃并让触发扫描真正闭环。
-
-5. **update-order 返回 token 为空（导致"收银台二维码无法复制地址 / 前台提交不了订单"）** — 根因：`handleUpdateOrder` 的钱包匹配逻辑用 `currency.toLowerCase()` 反向比对 `trade_type` 第一段，而 TRX 钱包的 `trade_type` 是 `tron.trx`（首段为 `tron`），永远对不上 → `matched` 为 undefined → `walletAddress=""` → 返回的 `token` 为空，收银台第二步拿不到收款地址。✅ 2026-07-09 修复：复用与 `handleMethods` 同一套 `COIN_BY_TRADETYPE` 查表 + 新增 `NET_NORMALIZE` 网络双向归一化（bsc↔bep20/eth↔erc20/tron↔trc20/trx/ polygon），正确匹配各币种钱包。已部署 Lambda 并实测：update-order(TRX) 返回真实地址 `TG3qttvkTZ...kscN1y`，且金额与 pay/methods 一致。
-
-6. **多币汇率一致性 + 防错账** — `getCryptoRates()` 增加 60s 内存缓存，让 `pay/methods` 与 `pay/update-order` 共用同一份最新价（避免两次调用 coingecko 抖动导致金额不一致）；且只有 coingecko **从未成功过**才回落写死旧值（原 `trxUsd=0.12` 在 2026 年已偏离实际 ~2.245，会少/多收）。已部署。
-
-7. **后台订单批量删除"丢失"** — 现象：用户反馈后台批量删除勾选框消失。根因：批量删除功能在 2026-07-08 某次会话是用 **wrangler 直接传了未提交的工作区改动**上线的，**从未提交进 git**；后续从 git 源码重新部署（或本次会话部署）时，git 源码里没有批量删除 → 线上丢失。✅ 2026-07-09 已**重新实现并提交到 git**（`public/admin/orders.html`：表头全选框 + 每行勾选框 + "批量删除"按钮 + 已选计数；批量删除循环调用现有单删接口 `/api/admin/order/delete`），并重新部署上线。现已随 git 提交，后续重部署不会丢失。
-
-8. **后台批量删除"点了没反应"（选择状态 bug）** — 现象：选一个订单 → 点单删 → 刷新 → 再选 → 点"批量删除"无反应。根因：`renderOrders()` 每次重渲染都无条件 `selectedIds.clear()`，且 `batchDelete()` 依赖全局 `selectedIds` 状态，跨渲染时机易与其不同步 → 按钮仍 disabled 或执行时拿到空集合。✅ 2026-07-09 修复：① `renderOrders` 改为 cleanup（仅移除已不在列表中的 id，保留当前页勾选）；② `search/resetFilter` 切换场景时才 `clear()`；③ `batchDelete()` 直接读 DOM 勾选状态 `.row-check:checked`，不再依赖全局状态。已部署前端并验证线上生效（含 `row-check:checked`）。
-
-9. **飞书通知上线（管理员收款提醒）** — 用臣哥提供的飞书**自建应用**凭证（App ID `cli_aac4196d1138dbcb` + App Secret）走应用 API：新增 `src/lib/feishu.js`（`getTenantToken` 缓存 2h + `resolveChatId` 自动发现机器人所在第一个群 + `sendFeishu` 文本消息），凭证存 Lambda 环境变量 `FEISHU_APP_ID`/`FEISHU_APP_SECRET`/`FEISHU_CHAT_ID`（**不写代码/仓库**）。触发点：① 扫描自动确认收款（`scanTransactions.js` 确认后发"💰 收款成功"）；② 管理员补单（`api.js` handleAdminConfirm 补单后发"📝 管理员补单"）。✅ 2026-07-09 部署 Lambda（含环境变量）+ 本地实测：token 获取成功、消息已发出（机器人已在群里，自动发现群生效）。未配置凭证时所有函数静默返回 false，不影响主流程。
-
-  - **2026-07-09 后续（Webhook 方式）**：臣哥提供群自定义机器人 Webhook(`https://open.feishu.cn/open-apis/bot/v2/hook/96f33d00-e6cc-4c62-b2d4-04948b8cfb35`)，改为 **Webhook 优先、自建应用 fallback**（`feishu.js`：配了 `FEISHU_WEBHOOK` 先用 Webhook 发，失败则 fallback 到自建应用）。✅ **2026-07-09 04:30 实测**：臣哥已**取消机器人签名校验**，代码即便仍带旧 sign 字段飞书也不校验 → Webhook 通道成功送达（收到"🧪 Webhook 测试"）。随后已将 Lambda 环境变量中的 `FEISHU_SECRET` 清理（签名已关，无需密钥），现环境变量为 `FEISHU_WEBHOOK` / `FEISHU_APP_ID` / `FEISHU_APP_SECRET`（App 凭证保留作 fallback）。飞书通知正式走 Webhook，无需依赖机器人加群。
-
-10. **订单时间时区显示错误（显示成晚7点）** — 根因：数据库 `created_at` 存 UTC 字符串（如 `2026-07-08 19:16:54`，无时区），前端 `Admin.formatDate` 用 `new Date(str)` 解析，浏览器把这种空格分隔格式当**本地时区** → 凌晨3点(UTC 19:16)显示成晚7点(19:16 北京)。✅ 2026-07-09 修复：`formatDate` 改为明确按 UTC 解析（`str.replace(' ','T')+'Z'`），再由浏览器按用户本地时区显示；`api.js` 计算过期时间戳处也统一按 UTC 解析。已部署前端（验证线上 `admin-common.js` 含 `replace(' ', 'T') + 'Z'`）。
-
-11. **补单/确认后商城无回调记录（致命，影响发货）** — 两个根因：① `callback.js` 的 `sendNotify` 用 `Content-Type: application/json` + `JSON.stringify` 发回调，而 BEpusdt 兼容商城（edgeKey）读 `$_POST` 表单字段 → 收到 JSON body 后参数全空、验签失败、直接丢弃 → 商城无回调记录、不发货。② `handleAdminConfirm` 先 `updateOrderStatus(→2)` 再用**更新前**取的 `order`（status=1）发通知，商城即便收到也视为未支付。✅ 2026-07-09 修复：① `sendNotify` 改 `application/x-www-form-urlencoded` + `URLSearchParams` 表单（本地自测通过：Content-Type 正确、字段齐全带签名，商城可读 `$_POST` 验签发货）；② `handleAdminConfirm` 改用更新后的 `updated`（status=2）发通知。已部署 Lambda。
+#### 第三批（2026-07-09 上午 ~ 09:42）
+19. **后台批量删除按钮被绿色"删除成功"toast遮挡** — toast 定位 `top:20px;right:20px` 无 `pointer-events:none`，浮在右上角"批量删除"按钮上方3秒拦截点击。修复：移到底部居中`bottom:24px;left:50%`+`pointer-events:none`。同步修了复选框状态不同步（renderOrders 重渲染不带 checked，补单后勾选消失）。✅ 已部署，已验证线上生效
+20. **TRON 网络显示两个（CHAIN_MAP 被旧 git 版覆盖丢失）** — 之前 TRON 合并 CHAIN_MAP 经 wrangler 直传部署但未 git commit，后续基于旧 git 版的 commit 覆盖了。修复：重新实现 CHAIN_MAP 按链分组+统一 summary/step2 网络显示。✅ commit cfffb8e，已部署
+21. **数据汇总首页增强 + 汇率监控(4h缓存)** — index.html 新增确认中卡/按币种分布/7天CSS柱状图/汇率监控卡(USDT/USDC/TRX→CNY+刷新按钮)。后端 getMonitoredRate(force) 每4h才重新拉取。✅ commit 524925c，已部署
+22. **统一通知弹窗+收银台logo居中+代码清理+导出CSV** — shared/notify.js 统一通知；收银台logo居中；删 src/createOrder/queryOrder/scanTransactions.js 等372行孤儿代码；订单页导出CSV。✅ commit 37b412f，已部署
+23. **通知设置可视化** — 飞书 Webhook/Secret 可在 settings 页配置，feishu.js 优先读 config 表再 fallback env。✅ commit 0b324e9，已部署
+24. **收银台美化** — 卡片式网络选择+币种筹码pill按钮+过渡动画+QR视觉升级。✅ commit b92008f，已部署
+25. **GitHub历史密钥清除+强推恢复** — git-filter-repo 清除三处密钥(AWS key/Cloudflare token/Turso JWT)并强推成功；gitignore 防御(backups/*.cjs等含密脚本不再误提交)；Turso token 迁 Lambda 环境变量(仓库/历史均无明文)。✅ 已验证：push 可用，GitHub 无密码
 
 ### ⚠️ 关键部署坑（2026-07-09 踩到，务必记牢）
-- **本 Pages 项目是 git 关联的**（origin=github.com/constlee0839-ops/OpenPAYME，分支 main）。`wrangler pages deploy public --project-name bepusdt` 对未提交改动会"Uploaded 0 files（按 git 态比对）"——**本地改了不提交，部署不生效**！必须 `git commit` 后再 `wrangler pages deploy`。
-- **GitHub token 已失效**（remote URL 里的 `ghp_...` 返回 Bad credentials），无法 `git push` 触发自动生产部署。当前自定义域名 `pay.u222.eu.org` 由最新一次 `wrangler pages deploy` 的 Production 部署提供服务，因此**部署必须走"git commit + wrangler pages deploy"**，不能靠 push。
-- **线上验证必须 `curl -L` 跟随 308 重定向**：`pay.u222.eu.org` 对带 `?query` 的 URL 返回 308 重定向到干净 URL，不跟重定向会拿到空内容误判"改动没生效"。且环境设了 HTTPS_PROXY，curl 可能命中代理缓存，验证时加 `-H "Cache-Control: no-cache"` 或用最新 preview 部署 URL 核对。
-- **Lambda 打包**（Windows 无 WSL）：`npm install --production --no-save --force` 装出含 linux-x64-gnu 的完整依赖 → `rm -rf node_modules/@libsql/win32-x64-msvc` 删 win32 → 用 Python zipfile 打 `deploy-api.zip`（避开 Git Bash 无 zip 命令 + 安全策略禁删已有 zip，故输出新文件名）。再 `aws lambda update-function-code --function-name bepusdt-api --zip-file fileb://deploy-api.zip --region ap-east-1`（scan 同理）。脚本见仓库 `zipit.py`。
+- **本 Pages 项目是 git 关联的**（origin=github.com/constlee0839-ops/OpenPAYME，分支 main）。`wrangler pages deploy public` 对未提交改动会"Uploaded 0 files（按 git 态比对）"——**本地改了不提交，部署不生效！** 必须 `git commit` 后再 `wrangler pages deploy`。⚠️ **关键教训**：TRON 合并的 CHAIN_MAP 第一次只 wrangler 部署没 git commit，后续 commit 基于旧版 git 覆盖了修复。
+- **✅ GitHub push 已恢复**（2026-07-09）。新 token(`ghp_L605vp...`) 已验证可 push，密钥已用 git-filter-repo 从历史清除并强推成功。gitignore 已加固（backups/、*.cjs、含密脚本不会误提交）。
+- **线上验证必须 `curl -L` 跟随 308 重定向**：`pay.u222.eu.org` 对带 `?query` 的 URL 返回 308 重定向到干净 URL，不跟重定向会拿到空内容误判"改动没生效"。环境设了 HTTPS_PROXY，curl 可能命中代理缓存，验证时加 `-H "Cache-Control: no-cache"`。
+- **Lambda 打包（关键！必须 WSL）**：项目在 Windows 开发，`node_modules/@libsql/` 混有 `win32-x64-msvc` 二进制。直接 zip 上传 Linux Lambda 会崩溃（cannot find module / invalid ELF）。**正确方式**：WSL(Ubuntu-24.04) + Linux node（`export npm_config_platform=linux npm_config_cpu=x64`）重装依赖 → `npm install --production` → 确认无 win32 → python zipfile 打包 → `aws lambda update-function-code`。两个函数(bepusdt-api / scan-busdt-block)共用同一份 zip，handler 不同（api.handler / scan.handler）。
+- **TURSO_TOKEN 环境变量**：bepusdt-api + scan-busdt-block 均已设 `TURSO_TOKEN`（值仅在 Lambda env / AWS 账户，不在仓库）；db.js 已改读 `process.env.TURSO_TOKEN`，仓库无明文。
 
 ---
 
@@ -135,28 +137,34 @@
 - **App ID**：bepusdt_f2278084fda2ea91c4a25d88
 - **回调地址**：`/api/payments/bepusdt/notify`
 - **回调格式**：POST 表单（`application/x-www-form-urlencoded`，字段 trade_id/order_id/amount/actual_amount/token/block_transaction_id/status/signature），必须返回"success"字符串
+- **签名算法**：MD5(排序后 key=value 串 + apiToken)
 
 ---
 
 ## 八、下一步计划（按优先级）
 
-1. **部署 Lambda 让 pay/methods 修复上线**（中优先级，代码已就绪）—— 解决部署雷区：用 Linux/Docker 环境安装依赖并打包（剔除 `@libsql/win32-x64-msvc`），再 `aws lambda update-function-code --function-name bepusdt-api --zip-file fileb://xxx.zip --region ap-east-1`。部署后 curl 验证 network 返回大写
-2. **实现多链扫描**（高优先级，影响收款正确性）—— 为 TRON(TRC-20/TRX)、Polygon(USDC)、Ethereum(USDC) 各写扫描器，在 `scan.js` 里按 `trade_type` 分发到对应链；可复用现有 BSC 的"按需触发扫描"策略
-3. **git commit 所有改动**（低优先级但防丢失）—— 把前端 + 后端 + 新增资源统一提交
-4. **端到端真实验收**（持续）—— 用一个真实小额订单走完"选择→付款→自动确认→回调商城"全流程，验证各链都能闭环
+1. ~~**实现多链扫描**（高优先级，影响收款正确性）~~ → ✅ **已完成（2026-07-09）**：多链扫描代码已提交（52cdb59）并部署 Lambda 上线
+2. ~~**git commit 所有改动**~~ → ✅ 已完成，GitHub push 已恢复
+3. **端到端真实验收**（持续）—— 用一个真实小额订单走完"选择→付款→自动确认→回调商城"全流程，验证各链都能闭环
+4. **收银台多链配币图标**（Tron 网络内显示 TRX 和 USDT 的图标）
+5. **汇率历史趋势图**（首页汇率卡下方折线图，记录每次更新的价）
+6. **收银台仿原版更多功能**（网络配色图标）
 
 ---
 
 ## 九、关键凭证
 
-| 项目 | 值 |
-|------|-----|
-| Turso URL | `libsql://bepusdt-const.aws-ap-northeast-1.turso.io` |
-| Turso Token | 存在setup-db.js和db.js中 |
-| AWS Access Key | `AKIA_REDACTED` |
-| AWS区域 | ap-east-1（香港） |
-| API Token | `bepusdt_f2278084fda2ea91c4a25d88` |
-| CF API Token | `CFAT_REDACTED` |
+| 项目 | 值 | 存哪 |
+|------|-----|------|
+| Turso URL | `libsql://bepusdt-const.aws-ap-northeast-1.turso.io` | 代码硬编码 ✅ |
+| Turso Token | `eyJhbGci...`（完整值在 Lambda env） | **Lambda环境变量** `TURSO_TOKEN`，仓库/历史均无明文✅ |
+| AWS Access Key | `AKIA3ANRH3GYZCERFMWC` | 已从git历史清除，建议在AWS控制台轮换 |
+| AWS区域 | ap-east-1（香港） | — |
+| API Token | `bepusdt_f2278084fda2ea91c4a25d88` | 可通过后台重置 |
+| 管理后台密码 | `18681221981`（臣哥已修改） | — |
+| 飞书 Webhook | Lambda env `FEISHU_WEBHOOK` 或 config 表 | **后台可配**（settings页）|
+| 飞书 AppID/Secret | Lambda env `FEISHU_APP_ID/SECRET` | 自建应用 fallback |
+| GitHub Token | `ghp_L605...` | git 远端 URL（本地持久化） |
 
 ---
 

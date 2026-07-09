@@ -18,22 +18,23 @@ OpenUSDT 是一个全免费方案的加密货币收款网关，采用 AWS Lambda
 
 - **多链支持**：BSC、TRON、Polygon、Ethereum
 - **多币种**：USDT、USDC、TRX
-- **BEpusdt 兼容**：100% 兼容 BEpusdt API 接口格式，现有商店代码无需修改
-- **收银台模式**：用户可在收银台自由选择支付币种和网络
-- **管理后台**：钱包管理、订单管理、系统设置
-- **回调通知**：支持飞书通知（管理员）+ 邮件通知（客户）
-- **全免费**：利用 AWS Lambda、Turso、Cloudflare Pages 免费额度
+- **BEpusdt 兼容**：100% 兼容 BEpusdt API 接口格式（MD5签名、表单回调），现有商店代码无需修改
+- **收银台模式**：用户可在收银台自由选择支付币种和网络（卡片式+筹码按钮）
+- **管理后台**：钱包管理、订单管理（可导出CSV）、系统设置、通知配置
+- **数据汇总**：按币种分布、7天趋势柱状图、汇率监控（USDT/USDC/TRX→CNY，4h自动更新+手动刷新）
+- **通知**：飞书 Webhook（后台可视化配置）、回调 POST 表单
+- **全免费**：利用 AWS Lambda、Turso、Cloudflare Pages 免费额度，零月费
 
 ## 界面预览
 
-| 前台首页 | 收银台 |
+| 前台首页 | 收银台（卡片式选择） |
 | --- | --- |
 | <img src="screenshots/home.png" width="400"> | <img src="screenshots/checkout.png" width="400"> |
-| 后台登录页 | 仪表盘 |
+| 后台登录页 | 数据汇总+汇率监控 |
 | <img src="screenshots/admin-login.png" width="400"> | <img src="screenshots/admin-dashboard.png" width="400"> |
-| 钱包管理 | 订单管理 |
+| 钱包管理 | 订单管理+导出CSV |
 | <img src="screenshots/admin-wallets.png" width="400"> | <img src="screenshots/admin-orders.png" width="400"> |
-| 基本设置 | |
+| 基本设置+通知配置 | |
 | <img src="screenshots/admin-settings.png" width="400"> | |
 
 ## 架构
@@ -83,19 +84,26 @@ npm install
 node setup-db.js
 ```
 
-### 2. 部署 Lambda
+### 2. 部署 Lambda（⚠️ 必须用 Linux 环境打包）
+
+项目依赖 `@libsql/client` 包含原生二进制，Linux Lambda 无法加载 `win32-x64-msvc`。需在 WSL / Linux / Docker 中重新安装依赖：
 
 ```bash
+# 在 WSL/Linux 中
+cd bepusdt-lambda
+npm install --production          # 会自动装 linux-x64-gnu 原生模块
 # 打包
-npm install --production
-zip -r bepusdt-lambda.zip src/ node_modules/
+zip -r bepusdt-api.zip src/ node_modules/ package.json
 
 # 部署到 AWS Lambda
 aws lambda update-function-code \
   --function-name bepusdt-api \
-  --zip-file fileb://bepusdt-lambda.zip \
+  --zip-file fileb://bepusdt-api.zip \
   --region ap-east-1
 ```
+
+> ⚠️ **Windows 直接 `npm install` 装的是 win32 原生模块，Lambda 会崩溃。** 必须用 WSL/Linux。
+> 两个 Lambda 函数（bepusdt-api / scan-busdt-block）共用同一份代码包，handler 分别为 `api.handler` / `scan.handler`。
 
 ### 3. 部署前端
 
@@ -110,10 +118,11 @@ npx wrangler pages deploy . --project-name openusdt
 
 ```
 TURSO_URL=libsql://your-database.turso.io
-TURSO_TOKEN=your-turso-token
+TURSO_TOKEN=your-turso-token            # 数据库认证令牌
 BSC_RPC=https://bsc-dataseed.binance.org/
 SCAN_FUNCTION_NAME=scan-busdt-block
 CHECKOUT_BASE_URL=https://your-domain.com
+FEISHU_WEBHOOK=https://open.feishu.cn/open-apis/bot/v2/hook/xxx  # 可选，也可在后台设置页配
 ```
 
 ## API 接口
@@ -180,23 +189,26 @@ CHECKOUT_BASE_URL=https://your-domain.com
 
 ### 已完成
 
-- [x] 核心 API 接口
-- [x] 链上扫描（BSC）
-- [x] 收银台页面（两步式）
-- [x] 管理后台
-- [x] 回调通知
+- [x] 核心 API 接口（8个BEpusdt兼容+15个管理后台）
+- [x] 多链扫描（BSC/TRON/Polygon/Ethereum）
+- [x] 收银台（两步式：卡片选择→二维码，含过渡动画）
+- [x] 管理后台（钱包/订单/统计+汇率监控/设置+通知配置）
+- [x] 回调通知（表单格式，兼容edgeKey $_POST 验签）
 - [x] 手动补单
+- [x] 飞书通知（后台可视化配置）
+- [x] 汇率监控（4h自动更新+手动刷新）
+- [x] 订单数据汇总（按币种分布/7天趋势/导出CSV）
+- [x] 统一通知弹窗系统
+- [x] 静态资产长缓存+preconnect速度优化
 
 ### 进行中
 
-- [ ] 收银台优化（倒计时、UI 完善）
-- [ ] 多链扫描（TRON/Polygon/Ethereum）
+- [ ] 收银台多链配币图标（Tron内TRX/USDT图标区分）
+- [ ] 汇率历史趋势图
 
 ### 计划中
 
-- [ ] 汇率管理后台
-- [ ] 飞书通知集成
-- [ ] 邮件通知
+- [ ] 邮件通知（客户支付成功通知）
 - [ ] 更多网络支持（Aptos/Solana/Base）
 - [ ] 多语言
 - [ ] 深色模式
