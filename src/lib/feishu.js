@@ -13,15 +13,17 @@
  */
 
 const crypto = require("crypto");
+const db = require("./db");
 
 let _appToken = null;
 let _appTokenExpire = 0;
 
 // ===== 方式一：群自定义机器人 Webhook（优先）=====
 async function sendByWebhook(title, lines) {
-  const url = process.env.FEISHU_WEBHOOK;
-  if (!url) return null; // 未配置 => 交给 fallback
-  const secret = process.env.FEISHU_SECRET || "";
+  // 优先使用 config 表中用户后台配置的 webhook（如果有），否则 fallback 到环境变量
+  let url = await db.getConfig('feishu_webhook') || process.env.FEISHU_WEBHOOK;
+  let secret = await db.getConfig('feishu_secret') || process.env.FEISHU_SECRET || "";
+  if (!url) return null; // 未配置任何来源
   const text =
     "【OpenPAYME】\n" +
     (title || "") +

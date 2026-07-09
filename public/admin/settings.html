@@ -96,6 +96,24 @@
       </div>
     </div>
 
+    <!-- 通知设置 -->
+    <div class="card">
+      <div class="card-title">通知设置</div>
+      <div class="form-group">
+        <label class="form-label">飞书 Webhook URL</label>
+        <input class="form-input" id="feishuWebhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxx" style="max-width:520px;">
+        <div class="form-hint">飞书群自定义机器人的 Webhook 地址。留空表示不启用飞书通知。</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">飞书 Webhook 签名密钥（可选）</label>
+        <input class="form-input" id="feishuSecret" type="password" placeholder="设置签名密钥后需要配套配置" style="max-width:400px;">
+        <div class="form-hint">如果飞书机器人开启了「签名校验」，在此填入签名密钥。未开启则留空。</div>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" onclick="saveFeishu()">保存通知设置</button>
+      </div>
+    </div>
+
     <!-- 修改密码 -->
     <div class="card">
       <div class="card-title">修改密码</div>
@@ -143,6 +161,8 @@
         document.getElementById('apiToken').textContent = cfg.api_auth_token || '--';
         document.getElementById('checkoutUrl').value = cfg.checkout_url || 'https://pay.u222.eu.org';
         document.getElementById('usdtRate').value = cfg.usdt_rate || '7.2';
+        document.getElementById('feishuWebhook').value = cfg.feishu_webhook || '';
+        document.getElementById('feishuSecret').value = cfg.feishu_secret || '';
       }).catch(function() {
         document.getElementById('apiToken').textContent = '加载失败';
       });
@@ -199,6 +219,17 @@
         } else {
           Admin.showToast(res.message || '修改失败', 'error');
         }
+      });
+    }
+
+    function saveFeishu() {
+      var url = document.getElementById('feishuWebhook').value.trim();
+      var secret = document.getElementById('feishuSecret').value.trim();
+      var promises = [];
+      promises.push(Admin.request('/api/admin/config', { key: 'feishu_webhook', value: url }));
+      promises.push(Admin.request('/api/admin/config', { key: 'feishu_secret', value: secret }));
+      Promise.all(promises).then(function () {
+        Admin.showToast('通知设置保存成功', 'success');
       });
     }
 
