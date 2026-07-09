@@ -1,11 +1,19 @@
+# 管理后台 & 收银台 — 不缓存 HTML 内容
 /admin/*
-  Cache-Control: no-store
-
+  Cache-Control: no-store, no-cache, must-revalidate
 /checkout-counter*
-  Cache-Control: no-store
-
+  Cache-Control: no-store, no-cache, must-revalidate
 /index*
-  Cache-Control: no-store
+  Cache-Control: no-store, no-cache, must-revalidate
 
+# 静态资产 — 长缓存（哈希文件名，无需协商）
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# JS 库 — 长缓存（已 minify 且不变）
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML fallback — 协商缓存
 /*.html
-  Cache-Control: no-store
+  Cache-Control: no-cache

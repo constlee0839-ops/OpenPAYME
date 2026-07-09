@@ -13,6 +13,14 @@
 
   var API_BASE = 'https://k00ytcrlnb.execute-api.ap-east-1.amazonaws.com';
 
+  // 动态预连接 API 域名（加速首次 API 调用）
+  var pre = document.createElement('link');
+  pre.rel = 'preconnect'; pre.href = API_BASE;
+  document.head.appendChild(pre);
+  var dns = document.createElement('link');
+  dns.rel = 'dns-prefetch'; dns.href = API_BASE;
+  document.head.appendChild(dns);
+
   function getToken() {
     return localStorage.getItem('admin_token') || '';
   }
